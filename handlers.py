@@ -17,6 +17,9 @@ async def help_command(update: Update, context: CallbackContext) -> None:
 async def echo(update: Update, context: CallbackContext) -> None:
     if should_reply():
         await update.message.reply_text(update.message.text + " - сказал пьяница")
+    elif should_reply(0.02):
+        await update.message.reply_text("🤓")
+
 
 
 async def handle_photo(update: Update, context: CallbackContext) -> None:
