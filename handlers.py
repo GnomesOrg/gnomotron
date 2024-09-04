@@ -16,14 +16,12 @@ async def help_command(update: Update, context: CallbackContext) -> None:
 
 async def echo(update: Update, context: CallbackContext) -> None:
     if should_reply():
-        await update.message.reply_text(update.message.text + " - сказал пьяница")
-    elif should_reply(0.02):
-        await update.message.reply_text("🤓")
+        await update.message.reply_text(random.choice([" - сказал пьяница", "🤓", " - лучше бы пьяница молчал"]))
 
 
 
 async def handle_photo(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text('Красивое фото пьяницы')
+    await update.message.reply_text("Красивое фото пьяницы", "Смешной прикол!!", "Удали.")
 
 
 def should_reply(probability=0.05) -> bool:
