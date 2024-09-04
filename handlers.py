@@ -9,7 +9,9 @@ async def start(update: Update, context: CallbackContext) -> None:
 
 
 async def help_command(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text('help')
+    chat_id = update.effective_chat.id
+
+    await update.message.reply_text('Current chat id is: ' + str(chat_id))
 
 
 async def echo(update: Update, context: CallbackContext) -> None:
