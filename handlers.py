@@ -17,12 +17,13 @@ async def help_command(update: Update, context: CallbackContext) -> None:
 
 
 async def help_gpt(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text(get_gpt_response_with_message("Как настроение?"))
+    text = update.message.text.split(" ", 1)[1]
+    await update.message.reply_text(get_gpt_response_with_message(text))
 
 
 async def echo(update: Update, context: CallbackContext) -> None:
     if should_reply():
-        await update.message.reply_text(random.choice(["🤓", get_gpt_response_with_message(update.message.text)]))
+        await update.message.reply_text(get_gpt_response_with_message(update.message.text))
 
 
 async def handle_photo(update: Update, context: CallbackContext) -> None:
@@ -30,5 +31,5 @@ async def handle_photo(update: Update, context: CallbackContext) -> None:
         await update.message.reply_text(random.choice(["Красивое фото пьяницы", "Смешной прикол!!", "Удали."]))
 
 
-def should_reply(probability=0.15) -> bool:
+def should_reply(probability=0.25) -> bool:
     return random.random() < probability
