@@ -16,6 +16,10 @@ async def help_command(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text('Current chat id is: ' + str(chat_id))
 
 
+async def help_gpt(update: Update, context: CallbackContext) -> None:
+    await update.message.reply_text(get_gpt_response_with_message("Как настроение?"))
+
+
 async def echo(update: Update, context: CallbackContext) -> None:
     if should_reply():
         await update.message.reply_text(random.choice(["🤓", get_gpt_response_with_message(update.message.text)]))
