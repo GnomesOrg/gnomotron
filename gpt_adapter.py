@@ -60,4 +60,7 @@ def get_gpt_response_with_message(message):
         'Authorization': f'Bearer {iam_token}',
     }
 
-    return get_gpt_only_text(headers, message)
+    result = get_gpt_only_text(headers, message)
+    print(result)
+
+    return result
