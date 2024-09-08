@@ -1,6 +1,7 @@
 import requests
 import json
 from config import API_KEY
+from copy import deepcopy
 
 BODY_JSON = {
   "modelUri": "gpt://b1gh0fnleoo9l8ktrl5u/yandexgpt/latest",
@@ -23,7 +24,7 @@ BODY_JSON = {
 def get_gpt_only_text(auth_headers, request_text):
     url = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion'
 
-    data = BODY_JSON
+    data = deepcopy(BODY_JSON)
     data["messages"].append({"role": "user", "text": request_text})
     data = json.dumps(data, ensure_ascii=False)
 
