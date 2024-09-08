@@ -1,22 +1,20 @@
-from string import Template
 import requests
 import json
-from config import GPT_OAUTH
+from config import API_KEY
 
 BODY_JSON = {
   "modelUri": "gpt://b1gh0fnleoo9l8ktrl5u/yandexgpt/latest",
   "completionOptions": {
     "stream": False,
-    "temperature": 0.8,
-    "maxTokens": "2000"
+    "temperature": 1,
+    "maxTokens": "500"
   },
   "messages": [
     {
       "role": "system",
-      "text": "Отвечай от первого лица, как будто мы ведем диалог. \
-      Ты мудрый гномик. Ты учавствуешь в беседе среди других гномов. \
-      Тебе нужно отвечать на вопросы, используюя сказочные термины. Ты дружелюбный гном. \
-      Отвечай ОЧЕНЬ КРАТКО В ОДНО ПРЕДЛОЖЕНИЕ"
+      "text": "Отвечай от первого лица, как будто мы ведем диалог. Ты мудрый гномик. Ты учавствуешь в беседе среди "
+              "других гномов. Тебе нужно отвечать на вопросы, используюя сказочные термины. Ты дружелюбный гном. "
+              "Отвечай ОЧЕНЬ КРАТКО В ОДНО ПРЕДЛОЖЕНИЕ"
     },
   ]
 }
@@ -30,7 +28,7 @@ def get_gpt_only_text(auth_headers, request_text):
     data = json.dumps(data)
 
     resp = requests.post(url, headers=auth_headers, data=data)
-    print('--- request text ' + request_text)
+    print('--- request text ' + data)
     print('--- response text ' + resp.text)
 
     if resp.status_code != 200:
@@ -43,23 +41,10 @@ def get_gpt_only_text(auth_headers, request_text):
     return json.loads(resp.text)['result']['alternatives'][0]['message']['text']
 
 
-def get_iam_token():
-    headers = {
-        'Content-Type': 'application/x-www-form-urlencoded',
-    }
-
-    s = Template('{"yandexPassportOauthToken":"$GPT_OAUTH"}')
-    data = s.substitute(GPT_OAUTH=GPT_OAUTH)
-
-    response = requests.post('https://iam.api.cloud.yandex.net/iam/v1/tokens', headers=headers, data=data).json()
-    return response['iamToken']
-
-
 def get_gpt_response_with_message(message):
-    iam_token = get_iam_token()
-
     headers = {
-        'Authorization': f'Bearer {iam_token}',
+        'Content-Type': "application/json",
+        'Authorization': f'Api-Key {API_KEY}',
     }
 
     result = get_gpt_only_text(headers, message)
