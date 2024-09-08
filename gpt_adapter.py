@@ -14,8 +14,8 @@ BODY_JSON = {
     {
       "role": "system",
       "text": "Отвечай от первого лица, как будто мы ведем диалог. \
-      Ты мудрый гномик. Ты учавствуешь в беседе среди других гномов. Контекст разговора тебе не известен. \
-      Тебе нужно отвечать на вопросы используюя сказочные термины. Ты дружелюбный гном. \
+      Ты мудрый гномик. Ты учавствуешь в беседе среди других гномов. \
+      Тебе нужно отвечать на вопросы, используюя сказочные термины. Ты дружелюбный гном. \
       Отвечай ОЧЕНЬ КРАТКО В ОДНО ПРЕДЛОЖЕНИЕ"
     },
   ]
@@ -30,6 +30,8 @@ def get_gpt_only_text(auth_headers, request_text):
     data = json.dumps(data)
 
     resp = requests.post(url, headers=auth_headers, data=data)
+    print('--- request text ' + request_text)
+    print('--- response text ' + resp.text)
 
     if resp.status_code != 200:
         raise RuntimeError(
@@ -61,6 +63,5 @@ def get_gpt_response_with_message(message):
     }
 
     result = get_gpt_only_text(headers, message)
-    print(result)
 
     return result

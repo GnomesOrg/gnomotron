@@ -31,5 +31,5 @@ async def handle_photo(update: Update, context: CallbackContext) -> None:
         await update.message.reply_text(random.choice(["Красивое фото пьяницы", "Смешной прикол!!", "Удали."]))
 
 
-def should_reply(probability=0.25) -> bool:
+def should_reply(probability=0.15) -> bool:
     return random.random() < probability
