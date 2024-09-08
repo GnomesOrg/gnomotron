@@ -25,7 +25,7 @@ def get_gpt_only_text(auth_headers, request_text):
 
     data = BODY_JSON
     data["messages"].append({"role": "user", "text": request_text})
-    data = json.dumps(data)
+    data = json.dumps(data, ensure_ascii=False)
 
     resp = requests.post(url, headers=auth_headers, data=data)
     print('--- request text ' + data)
