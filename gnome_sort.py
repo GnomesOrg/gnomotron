@@ -1,9 +1,7 @@
 
-
-
 # Гномья сортировка
 # Важный аспект гномотрона
-def gnome_sort(a):
+def sort(a):
     pos = 0
     while pos < len(a):
         if pos == 0 or a[pos] >= a[pos - 1]:
