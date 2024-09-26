@@ -23,9 +23,9 @@ jobs:
 
       - name: build and push the image
         run: |
-          docker image build -t 'ghcr.io/nekoMalchik/gnomotron:${{ github.sha }}' -t 'ghcr.io/nekoMalchik/gnomotron:latest' .
-          docker image push 'ghcr.io/nekoMalchik/gnomotron:${{ github.sha }}'
-          docker image push 'ghcr.io/nekoMalchik/gnomotron:latest'
+          docker image build -t 'ghcr.io/${{ github.actor }}/gnomotron:${{ github.sha }}' -t 'ghcr.io/${{ github.actor }}/gnomotron:latest' .
+          docker image push 'ghcr.io/${{ github.actor }}/gnomotron:${{ github.sha }}'
+          docker image push 'ghcr.io/${{ github.actor }}/gnomotron:latest'
 
   deploy:
     name: run the app
