@@ -71,7 +71,7 @@ jobs:
 
       - name: start the container with the new version
         run: |
-          docker container run \ 
+          docker container run \
             -d \
             --name gnomotron \
             -e GNOMOTRON_TELEGRAM_API_KEY=${{ secrets.GNOMOTRON_TELEGRAM_API_KEY }} \
