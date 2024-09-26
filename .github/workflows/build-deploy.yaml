@@ -18,14 +18,14 @@ jobs:
         name: login to ghcr
         with:
           registry: ghcr.io
-          username: nekoMalchik
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: build and push the image
         run: |
-          docker image build -t 'ghcr.io/nekomalchik/gnomotron:${{ github.sha }}' -t 'ghcr.io/${{ github.actor }}/gnomotron:latest' .
-          docker image push 'ghcr.io/nekomalchik/gnomotron:${{ github.sha }}'
-          docker image push 'ghcr.io/nekomalchik/gnomotron:latest'
+          docker image build -t 'ghcr.io/nekomalchik/gnomotron:${{ github.sha }}' -t 'ghcr.io/${{ github.repository_owner }}/gnomotron:latest' .
+          docker image push 'ghcr.io/${{ github.repository_owner }}/gnomotron:${{ github.sha }}'
+          docker image push 'ghcr.io/${{ github.repository_owner }}/gnomotron:latest'
 
   deploy:
     name: run the app
