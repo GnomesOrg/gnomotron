@@ -8,6 +8,8 @@ jobs:
   build-push:
     name: build docker image
     runs-on: ubuntu-20.04
+    permissions: 
+      packages: write
 
     steps:
       - uses: actions/checkout@v2.3.4
