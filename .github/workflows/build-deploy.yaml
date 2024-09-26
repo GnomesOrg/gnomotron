@@ -18,7 +18,7 @@ jobs:
         name: login to ghcr
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
+          username: nekoMalchik
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: build and push the image
