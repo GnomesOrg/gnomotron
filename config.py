@@ -1,4 +1,6 @@
-TOKEN = 'secret'
-CHAT_ID = 'secret'
+import os
+
+TOKEN = os.environ["GNOMOTRON_TELEGRAM_TOKEN"]
+CHAT_ID = os.environ["GNOMOTRON_TELEGRAM_CHAT_ID"]
+API_KEY = os.environ["GNOMOTRON_TELEGRAM_API_KEY"]
 SHOULD_DROP_MESSAGES = True
-API_KEY = 'secret'
