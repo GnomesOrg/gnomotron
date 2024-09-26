@@ -31,7 +31,7 @@ jobs:
     name: run the app
     runs-on: self-hosted
     needs: 
-      - build
+      - build-push
     
     steps:
       - uses: actions/checkout@v2.3.4
