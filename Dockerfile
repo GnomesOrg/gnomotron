@@ -8,4 +8,4 @@ COPY ./src /app/src
 
 EXPOSE 8080
 
-ENTRYPOINT python3 /app/bot.py
+ENTRYPOINT python3 /app/src/bot.py
