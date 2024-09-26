@@ -21,9 +21,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: build the image
+      - name: build and push the image
         run: |
-          docker image build -t 'ghcr.io/nekoMalchik/gnomotron:$GITHUB_SHA' -t 'ghcr.io/nekoMalchik/gnomotron:latest'
+          docker image build -t 'ghcr.io/nekoMalchik/gnomotron:$GITHUB_SHA' -t 'ghcr.io/nekoMalchik/gnomotron:latest' .
           docker image push 'ghcr.io/nekoMalchik/gnomotron:$GITHUB_SHA'
           docker image push 'ghcr.io/nekoMalchik/gnomotron:latest'
 
