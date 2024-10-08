@@ -11,7 +11,7 @@ def main():
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("helpgpt", help_gpt))
+    application.add_handler(CommandHandler("af", help_gpt))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
