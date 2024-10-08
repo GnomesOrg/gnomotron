@@ -28,7 +28,18 @@ async def echo(update: Update, context: CallbackContext) -> None:
 
 async def handle_photo(update: Update, context: CallbackContext) -> None:
     if should_reply(0.3):
-        await update.message.reply_text(get_gpt_response_with_message('Тебе показали забавную картинку. Опиши свою реакцию'))
+        reactions = [
+            "Тебе показали забавную картинку. Опиши свою реакцию",
+            "Перед тобой милое изображение. Как ты отреагируешь?",
+            "На экране смешная фотография. Какой твой ответ?",
+            "Ты видишь что-то необычное. Как бы ты это описал?",
+            "Картинка выглядит странно. Что ты скажешь?",
+            "Это что-то очень милое! Какова твоя реакция?"
+        ]
+
+        random_reaction = random.choice(reactions)
+
+        await update.message.reply_text(get_gpt_response_with_message(random_reaction))
 
 
 def should_reply(probability=0.04) -> bool:
