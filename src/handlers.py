@@ -45,5 +45,5 @@ async def handle_photo(update: Update, context: CallbackContext) -> None:
         await update.message.reply_text(get_gpt_response_with_message(random_reaction))
 
 
-def should_reply(probability=0.1) -> bool:
+def should_reply(probability=0.04) -> bool:
     return random.random() < probability
