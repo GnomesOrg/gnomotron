@@ -22,8 +22,11 @@ async def help_gpt(update: Update, context: CallbackContext) -> None:
 
 
 async def echo(update: Update, context: CallbackContext) -> None:
-    if should_reply():
-        await update.message.reply_text(get_gpt_response_with_message(update.message.text))
+    message_text = update.message.text
+    
+    if len(message_text) >= 40 and should_reply():
+        await update.message.reply_text(get_gpt_response_with_message(message_text))
+
 
 
 async def handle_photo(update: Update, context: CallbackContext) -> None:
@@ -42,5 +45,5 @@ async def handle_photo(update: Update, context: CallbackContext) -> None:
         await update.message.reply_text(get_gpt_response_with_message(random_reaction))
 
 
-def should_reply(probability=0.04) -> bool:
+def should_reply(probability=0.1) -> bool:
     return random.random() < probability
