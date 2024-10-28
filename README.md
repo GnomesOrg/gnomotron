@@ -1,1 +1,0 @@
-GNOMIK TG BOT :)
