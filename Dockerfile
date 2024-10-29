@@ -8,7 +8,7 @@ RUN go mod download
 
 COPY . .
 
-RUN go build -o flabergnomebot main.go
+RUN go build -o flabergnomebot .
 
 EXPOSE 8080
 
