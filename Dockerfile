@@ -1,11 +1,15 @@
-FROM python:3.10-alpine
+FROM golang:1.20-alpine
 
-COPY ./requirements.txt /app/
+WORKDIR /app
 
-RUN pip install -r /app/requirements.txt --no-cache-dir
+COPY go.mod go.sum ./
 
-COPY ./src /app/src
+RUN go mod download
+
+COPY . .
+
+RUN go build -o flabergnomebot main.go
 
 EXPOSE 8080
 
-ENTRYPOINT python3 /app/src/bot.py
+CMD ["./flabergnomebot"]
