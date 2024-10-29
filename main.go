@@ -14,7 +14,7 @@ func main() {
 
 	bot.Debug = true
 
-	handlerManager := HandlerManager{bot: bot, gptAdapter: adapter}
+	handlerManager := NewHandleManager(bot, adapter)
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
