@@ -74,7 +74,7 @@ jobs:
           docker container run \
             -d \
             --name gnomotron \
-            -e GNOMOTRON_TELEGRAM_API_KEY=${{ secrets.GNOMOTRON_TELEGRAM_API_KEY }} \
-            -e GNOMOTRON_TELEGRAM_TOKEN=${{ secrets.GNOMOTRON_TELEGRAM_TOKEN }} \
-            -e GNOMOTRON_TELEGRAM_CHAT_ID=${{ secrets.GNOMOTRON_TELEGRAM_CHAT_ID }} \
+            -e GNOMOTRON_TELEGRAM_API_KEY=${{ vars.GNOMOTRON_TELEGRAM_API_KEY }} \
+            -e GNOMOTRON_TELEGRAM_TOKEN=${{ vars.GNOMOTRON_TELEGRAM_TOKEN }} \
+            -e GNOMOTRON_TELEGRAM_CHAT_ID=${{ vars.GNOMOTRON_TELEGRAM_CHAT_ID }} \
             '${{ env.IMAGE_NAME }}'
