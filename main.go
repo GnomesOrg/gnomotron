@@ -49,7 +49,7 @@ func main() {
 					case "af":
 						handlerManager.HandleAskFlaber(&update)
 					default:
-						if update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.From.UserName != "GnomotronBot" {
+						if update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.From.UserName == "GnomotronBot" {
 							// handle only replies of gnomotron messages
 							// TODO: use id of the user
 							// TODO: get id or username from the config
