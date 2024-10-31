@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"sync"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -29,8 +30,13 @@ func main() {
 	// TODO: graceful shutdown
 	// TODO: get workers count from the config
 	workersCount := 8
+	var wg sync.WaitGroup
 	for i := 0; i < workersCount; i++ {
+		wg.Add(1)
+
 		go func() {
+			defer wg.Done()
+
 			for update := range updates {
 				if update.Message != nil {
 					log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
@@ -43,13 +49,10 @@ func main() {
 					case "af":
 						handlerManager.HandleAskFlaber(&update)
 					default:
-						if update.Message.ReplyToMessage != nil {
+						if update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.From.UserName != "GnomotronBot" {
 							// handle only replies of gnomotron messages
 							// TODO: use id of the user
 							// TODO: get id or username from the config
-							if update.Message.ReplyToMessage.From.UserName != "GnomotronBot" {
-								continue
-							}
 
 							handlerManager.HandleReply(&update)
 							continue
@@ -69,4 +72,6 @@ func main() {
 			}
 		}()
 	}
+
+	wg.Wait()
 }
