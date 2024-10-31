@@ -32,8 +32,17 @@ func (hm *HandlerManager) HandleStart(update *tgbotapi.Update) {
 }
 
 func (hm *HandlerManager) HandleImage(update *tgbotapi.Update) {
-	if ShouldReply(0) {
-		replyMsg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
+	if ShouldReply(0.3) {
+		reactions := [...]string{
+			"Неприятное изображение",
+			"Глупое изображние",
+			"Смешное изображние",
+			"Философское изображние",
+			"Страшное изображние",
+		}
+		replyText := hm.gptAdapter.AskGpt("Ты гном, говоришь на гномьем языке и отвечаешь от первого лица."+
+			" Ты получил изображение. Тебе нужно его прокомментировать.", reactions[rand.Intn(len(reactions))])
+		replyMsg := tgbotapi.NewMessage(update.Message.Chat.ID, replyText)
 		replyMsg.ReplyToMessageID = update.Message.MessageID
 		hm.bot.Send(replyMsg)
 	}
@@ -43,7 +52,8 @@ func (hm *HandlerManager) HandleEcho(update *tgbotapi.Update) {
 	if ShouldReply(0.04) && len(update.Message.Text) > 40 {
 		replyText := hm.gptAdapter.AskGpt("Ты получил сообщение из чата гномов вне контекста."+
 			" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
-			" Разговаривай как гном", update.Message.Text)
+			" Разговаривай как гном"+
+			" ВАЖНО ОТВЕЧАТЬ ОТ ПЕРВОГО ЛИЦА", update.Message.Text)
 		replyMsg := tgbotapi.NewMessage(update.Message.Chat.ID, replyText)
 		replyMsg.ReplyToMessageID = update.Message.MessageID
 		hm.bot.Send(replyMsg)
@@ -54,7 +64,8 @@ func (hm *HandlerManager) HandleAskFlaber(update *tgbotapi.Update) {
 	replyText := hm.gptAdapter.AskGpt("Тебя заставляют общаться в чате гномов."+
 		" Ты ОЧЕНЬ не хочешь отвечать. Но ответ дать ты обязан. Тебе неприятно общаться с гномамы."+
 		" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
-		" Разговаривай как гном", strings.TrimPrefix(update.Message.Text, "/af"))
+		" Разговаривай как гном"+
+		" ВАЖНО ОТВЕЧАТЬ ОТ ПЕРВОГО ЛИЦА", strings.TrimPrefix(update.Message.Text, "/af"))
 	replyMsg := tgbotapi.NewMessage(update.Message.Chat.ID, replyText)
 	replyMsg.ReplyToMessageID = update.Message.MessageID
 	hm.bot.Send(replyMsg)
