@@ -35,10 +35,10 @@ func main() {
 			case "af":
 				handlerManager.HandleAskFlaber(&update)
 			default:
-				if update.Message.ReplyToMessage != nil {
-					handlerManager.HandleReply(&update)
-					continue
-				}
+				//if update.Message.ReplyToMessage != nil {
+				//	handlerManager.HandleReply(&update)
+				//	continue
+				//}
 
 				if update.Message.Text != "" {
 					handlerManager.HandleEcho(&update)

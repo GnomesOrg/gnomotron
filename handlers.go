@@ -60,14 +60,14 @@ func (hm *HandlerManager) HandleAskFlaber(update *tgbotapi.Update) {
 	hm.bot.Send(replyMsg)
 }
 
-func (hm *HandlerManager) HandleReply(update *tgbotapi.Update) {
-	replyText := hm.gptAdapter.AskGpt("Ты получил сообщение из чата гномов."+
-		" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
-		" Разговаривай как гном", update.Message.Text)
-	replyMsg := tgbotapi.NewMessage(update.Message.Chat.ID, replyText)
-	replyMsg.ReplyToMessageID = update.Message.MessageID
-	hm.bot.Send(replyMsg)
-}
+//func (hm *HandlerManager) HandleReply(update *tgbotapi.Update) {
+//	replyText := hm.gptAdapter.AskGpt("Ты получил сообщение из чата гномов."+
+//		" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
+//		" Разговаривай как гном", update.Message.Text)
+//	replyMsg := tgbotapi.NewMessage(update.Message.Chat.ID, replyText)
+//	replyMsg.ReplyToMessageID = update.Message.MessageID
+//	hm.bot.Send(replyMsg)
+//}
 
 func ShouldReply(probability float32) bool {
 	return rand.Float32() < probability
