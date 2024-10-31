@@ -1,10 +1,11 @@
 package main
 
 import (
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"math/rand"
 	"strconv"
 	"strings"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 type HandlerManager struct {
@@ -20,7 +21,10 @@ func NewHandleManager(bot *tgbotapi.BotAPI, adapter *GptAdapter) *HandlerManager
 }
 
 func (hm *HandlerManager) HandleHelp(update *tgbotapi.Update) {
-	replyMsg := tgbotapi.NewMessage(update.Message.Chat.ID, "Current chat id is: "+strconv.FormatInt(update.Message.Chat.ID, 10))
+	replyMsg := tgbotapi.NewMessage(
+		update.Message.Chat.ID,
+		"Current chat id is: "+strconv.FormatInt(update.Message.Chat.ID, 10),
+	)
 	replyMsg.ReplyToMessageID = update.Message.MessageID
 	hm.bot.Send(replyMsg)
 }
@@ -40,8 +44,11 @@ func (hm *HandlerManager) HandleImage(update *tgbotapi.Update) {
 			"Философское изображние",
 			"Страшное изображние",
 		}
-		replyText := hm.gptAdapter.AskGpt("Ты гном, говоришь на гномьем языке и отвечаешь от первого лица."+
-			" Ты получил изображение. Тебе нужно его прокомментировать.", reactions[rand.Intn(len(reactions))])
+		replyText := hm.gptAdapter.AskGpt(
+			"Ты гном, говоришь на гномьем языке и отвечаешь от первого лица."+
+				" Ты получил изображение. Тебе нужно его прокомментировать.",
+			reactions[rand.Intn(len(reactions))],
+		)
 		replyMsg := tgbotapi.NewMessage(update.Message.Chat.ID, replyText)
 		replyMsg.ReplyToMessageID = update.Message.MessageID
 		hm.bot.Send(replyMsg)
@@ -71,14 +78,14 @@ func (hm *HandlerManager) HandleAskFlaber(update *tgbotapi.Update) {
 	hm.bot.Send(replyMsg)
 }
 
-//func (hm *HandlerManager) HandleReply(update *tgbotapi.Update) {
-//	replyText := hm.gptAdapter.AskGpt("Ты получил сообщение из чата гномов."+
-//		" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
-//		" Разговаривай как гном", update.Message.Text)
-//	replyMsg := tgbotapi.NewMessage(update.Message.Chat.ID, replyText)
-//	replyMsg.ReplyToMessageID = update.Message.MessageID
-//	hm.bot.Send(replyMsg)
-//}
+func (hm *HandlerManager) HandleReply(update *tgbotapi.Update) {
+	replyText := hm.gptAdapter.AskGpt("Ты получил сообщение из чата гномов."+
+		" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
+		" Разговаривай как гном", update.Message.Text)
+	replyMsg := tgbotapi.NewMessage(update.Message.Chat.ID, replyText)
+	replyMsg.ReplyToMessageID = update.Message.MessageID
+	hm.bot.Send(replyMsg)
+}
 
 func ShouldReply(probability float32) bool {
 	return rand.Float32() < probability

@@ -1,10 +1,12 @@
 package main
 
-import "log"
-import "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+import (
+	"log"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+)
 
 func main() {
-
 	cfg := LoadConfig()
 	adapter := NewGptAdapter(cfg.APIKEY)
 	bot, err := tgbotapi.NewBotAPI(cfg.TOKEN)
@@ -23,32 +25,48 @@ func main() {
 
 	updates := bot.GetUpdatesChan(u)
 
-	for update := range updates {
-		if update.Message != nil {
-			log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
+	// sometimes gnomotron is blocked by previous message, we may handle messages in parralel
+	// TODO: graceful shutdown
+	// TODO: get workers count from the config
+	workersCount := 8
+	for i := 0; i < workersCount; i++ {
+		go func() {
+			for update := range updates {
+				if update.Message != nil {
+					log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
 
-			switch update.Message.Command() {
-			case "start":
-				handlerManager.HandleStart(&update)
-			case "help":
-				handlerManager.HandleHelp(&update)
-			case "af":
-				handlerManager.HandleAskFlaber(&update)
-			default:
-				//if update.Message.ReplyToMessage != nil {
-				//	handlerManager.HandleReply(&update)
-				//	continue
-				//}
+					switch update.Message.Command() {
+					case "start":
+						handlerManager.HandleStart(&update)
+					case "help":
+						handlerManager.HandleHelp(&update)
+					case "af":
+						handlerManager.HandleAskFlaber(&update)
+					default:
+						if update.Message.ReplyToMessage != nil {
+							// handle only replies of gnomotron messages
+							// TODO: use id of the user
+							// TODO: get id or username from the config
+							if update.Message.ReplyToMessage.From.UserName != "GnomotronBot" {
+								continue
+							}
 
-				if update.Message.Text != "" {
-					handlerManager.HandleEcho(&update)
-				}
+							handlerManager.HandleReply(&update)
+							continue
+						}
 
-				if update.Message.Photo != nil {
-					handlerManager.HandleImage(&update)
+						if update.Message.Photo != nil {
+							handlerManager.HandleImage(&update)
+							continue
+						}
+
+						if update.Message.Text != "" {
+							handlerManager.HandleEcho(&update)
+							continue
+						}
+					}
 				}
 			}
-		}
+		}()
 	}
-
 }
