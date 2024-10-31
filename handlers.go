@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -84,7 +85,11 @@ func (hm *HandlerManager) HandleReply(update *tgbotapi.Update) {
 		" Разговаривай как гном", update.Message.Text)
 	replyMsg := tgbotapi.NewMessage(update.Message.Chat.ID, replyText)
 	replyMsg.ReplyToMessageID = update.Message.MessageID
-	hm.bot.Send(replyMsg)
+
+	// TODO: handle errors propperly, return err here
+	if _, err := hm.bot.Send(replyMsg); err != nil {
+		log.Printf("cannot handle reply properly, cannot send message back: %+v", err)
+	}
 }
 
 func ShouldReply(probability float32) bool {
