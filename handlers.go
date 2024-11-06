@@ -45,11 +45,16 @@ func (hm *HandlerManager) HandleImage(update *tgbotapi.Update) {
 			"Философское изображние",
 			"Страшное изображние",
 		}
-		replyText := hm.gptAdapter.AskGpt(
+		replyText, err := hm.gptAdapter.AskGpt(
 			"Ты гном, говоришь на гномьем языке и отвечаешь от первого лица."+
 				" Ты получил изображение. Тебе нужно его прокомментировать.",
 			reactions[rand.Intn(len(reactions))],
 		)
+		if err != nil {
+			log.Printf("cannot ask gpt a question: %+v", err)
+			return
+		}
+
 		replyMsg := tgbotapi.NewMessage(update.Message.Chat.ID, replyText)
 		replyMsg.ReplyToMessageID = update.Message.MessageID
 		hm.bot.Send(replyMsg)
@@ -58,10 +63,15 @@ func (hm *HandlerManager) HandleImage(update *tgbotapi.Update) {
 
 func (hm *HandlerManager) HandleEcho(update *tgbotapi.Update) {
 	if ShouldReply(0.04) && len(update.Message.Text) > 40 {
-		replyText := hm.gptAdapter.AskGpt("Ты получил сообщение из чата гномов вне контекста."+
+		replyText, err := hm.gptAdapter.AskGpt("Ты получил сообщение из чата гномов вне контекста."+
 			" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
 			" Разговаривай как гном"+
 			" ВАЖНО ОТВЕЧАТЬ ОТ ПЕРВОГО ЛИЦА", update.Message.Text)
+		if err != nil {
+			log.Printf("cannot ask gpt a question: %+v", err)
+			return
+		}
+
 		replyMsg := tgbotapi.NewMessage(update.Message.Chat.ID, replyText)
 		replyMsg.ReplyToMessageID = update.Message.MessageID
 		hm.bot.Send(replyMsg)
@@ -69,20 +79,30 @@ func (hm *HandlerManager) HandleEcho(update *tgbotapi.Update) {
 }
 
 func (hm *HandlerManager) HandleAskFlaber(update *tgbotapi.Update) {
-	replyText := hm.gptAdapter.AskGpt("Тебя заставляют общаться в чате гномов."+
+	replyText, err := hm.gptAdapter.AskGpt("Тебя заставляют общаться в чате гномов."+
 		" Ты ОЧЕНЬ не хочешь отвечать. Но ответ дать ты обязан. Тебе неприятно общаться с гномамы."+
 		" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
 		" Разговаривай как гном"+
 		" ВАЖНО ОТВЕЧАТЬ ОТ ПЕРВОГО ЛИЦА", strings.TrimPrefix(update.Message.Text, "/af"))
+	if err != nil {
+		log.Printf("cannot ask gpt a question: %+v", err)
+		return
+	}
+
 	replyMsg := tgbotapi.NewMessage(update.Message.Chat.ID, replyText)
 	replyMsg.ReplyToMessageID = update.Message.MessageID
 	hm.bot.Send(replyMsg)
 }
 
 func (hm *HandlerManager) HandleReply(update *tgbotapi.Update) {
-	replyText := hm.gptAdapter.AskGpt("Ты получил сообщение из чата гномов."+
+	replyText, err := hm.gptAdapter.AskGpt("Ты получил сообщение из чата гномов."+
 		" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
 		" Разговаривай как гном", update.Message.Text)
+	if err != nil {
+		log.Printf("cannot ask gpt a question: %+v", err)
+		return
+	}
+
 	replyMsg := tgbotapi.NewMessage(update.Message.Chat.ID, replyText)
 	replyMsg.ReplyToMessageID = update.Message.MessageID
 

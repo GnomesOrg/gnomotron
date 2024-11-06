@@ -43,15 +43,15 @@ func (g *GptAdapter) createRequestBody(model, systemMsg, userMsg string) ([]byte
 	return json.Marshal(requestData)
 }
 
-func (g *GptAdapter) AskGpt(systemMsg, userMsg string) string {
+func (g *GptAdapter) AskGpt(systemMsg, userMsg string) (string, error) {
 	body, err := g.createRequestBody("gpt-3.5-turbo", systemMsg, userMsg)
 	if err != nil {
-		log.Fatalf("Failed to create request body: %v", err)
+		return "", fmt.Errorf("cannot create request body: %w", err)
 	}
 
 	request, err := http.NewRequest("POST", g.baseURL, bytes.NewBuffer(body))
 	if err != nil {
-		log.Fatalf("Failed to create request: %v", err)
+		return "", fmt.Errorf("cannot create new http request: %w", err)
 	}
 
 	request.Header.Set("Content-Type", "application/json")
@@ -59,21 +59,24 @@ func (g *GptAdapter) AskGpt(systemMsg, userMsg string) string {
 
 	response, err := g.client.Do(request)
 	if err != nil {
-		log.Fatalf("Request failed: %v", err)
+		return "", fmt.Errorf("cannot get response from gpt server: %w", err)
 	}
 	defer response.Body.Close()
 
 	responseBody, err := io.ReadAll(response.Body)
 	if err != nil {
-		log.Fatalf("Failed to read response: %v", err)
+		return "", fmt.Errorf("cannot read the response from htp server: %w", err)
 	}
 
 	res := GptResponse{}
-	err = json.Unmarshal(responseBody, &res)
-	if err != nil {
-		return ""
+	if err := json.Unmarshal(responseBody, &res); err != nil {
+		return "", fmt.Errorf("cannot unmarshal gpt response as json: %w", err)
 	}
-	log.Println("GptResponse:", res.Choices[0].Message.Content)
 
-	return res.Choices[0].Message.Content
+	log.Printf("GptResponse: %+v", res)
+	if len(res.Choices) < 1 {
+		return "", fmt.Errorf("gpt couldn't answer the question, 0 choices were returned from server")
+	}
+
+	return res.Choices[0].Message.Content, nil
 }
