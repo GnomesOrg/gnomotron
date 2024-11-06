@@ -75,7 +75,7 @@ func (g *GptAdapter) AskGpt(systemMsg, userMsg string) (string, error) {
 
 	log.Printf("GptResponse: %+v", res)
 	if len(res.Choices) < 1 {
-		return "", fmt.Errorf("gpt couldn't answer the question, 0 choices were returned from server")
+		return "", fmt.Errorf("gpt couldn't answer the question, 0 choices were returned from server, the body is: %q", string(responseBody))
 	}
 
 	return res.Choices[0].Message.Content, nil
