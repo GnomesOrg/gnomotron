@@ -65,12 +65,12 @@ func (g *GptAdapter) AskGpt(systemMsg, userMsg string) (string, error) {
 
 	responseBody, err := io.ReadAll(response.Body)
 	if err != nil {
-		return "", fmt.Errorf("cannot read the response from htp server: %w", err)
+		return "", fmt.Errorf("cannot read the response from gpt server: %w", err)
 	}
 
 	res := GptResponse{}
 	if err := json.Unmarshal(responseBody, &res); err != nil {
-		return "", fmt.Errorf("cannot unmarshal gpt response as json: %w", err)
+		return "", fmt.Errorf("cannot unmarshal gpt response %q as json: %w", string(responseBody), err)
 	}
 
 	log.Printf("GptResponse: %+v", res)
