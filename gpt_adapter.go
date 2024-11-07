@@ -44,7 +44,7 @@ func (g *GptAdapter) createRequestBody(model, systemMsg, userMsg string) ([]byte
 }
 
 func (g *GptAdapter) AskGpt(systemMsg, userMsg string) (string, error) {
-	body, err := g.createRequestBody("gpt-3.5-turbo", systemMsg, userMsg)
+	body, err := g.createRequestBody("gpt-4o-mini", systemMsg, userMsg)
 	if err != nil {
 		return "", fmt.Errorf("cannot create request body: %w", err)
 	}
