@@ -31,7 +31,7 @@ func NewGptAdapter(apiToken string) *GptAdapter {
 	}
 }
 
-func (g *GptAdapter) createRequestBody(model, systemMsg, userMsg string) ([]byte, error) {
+func (g *GptAdapter) createRequestBody(model string, systemMsg string, userMsg string) ([]byte, error) {
 	requestData := map[string]interface{}{
 		"model": model,
 		"messages": []map[string]string{
@@ -43,7 +43,7 @@ func (g *GptAdapter) createRequestBody(model, systemMsg, userMsg string) ([]byte
 	return json.Marshal(requestData)
 }
 
-func (g *GptAdapter) AskGpt(systemMsg, userMsg string) (string, error) {
+func (g *GptAdapter) AskGpt(systemMsg string, userMsg string) (string, error) {
 	body, err := g.createRequestBody("gpt-4o-mini", systemMsg, userMsg)
 	if err != nil {
 		return "", fmt.Errorf("cannot create request body: %w", err)

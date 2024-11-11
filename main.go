@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flabergnomebot/config"
 	"log"
 	"sync"
 
@@ -8,7 +9,7 @@ import (
 )
 
 func main() {
-	cfg := LoadConfig()
+	cfg := config.LoadConfig()
 	adapter := NewGptAdapter(cfg.APIKEY)
 	bot, err := tgbotapi.NewBotAPI(cfg.TOKEN)
 	if err != nil {
