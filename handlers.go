@@ -24,10 +24,16 @@ func NewHandleManager(bot *tgbotapi.BotAPI, adapter *GptAdapter) *HandlerManager
 func (hm *HandlerManager) HandleHelp(update *tgbotapi.Update) {
 	replyMsg := tgbotapi.NewMessage(
 		update.Message.Chat.ID,
-		"Current chat id is: "+strconv.FormatInt(update.Message.Chat.ID, 10),
+		"Current chat id is: "+strconv.FormatInt(update.Message.Chat.ID, 10)+
+			" To create reminder type (new remind)"+
+			" /nr [{time in crontab format}] {body}",
 	)
 	replyMsg.ReplyToMessageID = update.Message.MessageID
 	hm.bot.Send(replyMsg)
+}
+
+func (hm *HandlerManager) HandleNewReminder(update *tgbotapi.Update) {
+
 }
 
 func (hm *HandlerManager) HandleStart(update *tgbotapi.Update) {
