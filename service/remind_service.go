@@ -33,15 +33,13 @@ func NewRemindRepository(client *mongo.Client, collection *mongo.Collection) *Re
 	return &RemindRepository{client, collection}
 }
 
-func (rRepo *RemindRepository) AddRemind(r Remind) *mongo.InsertOneResult {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+func (rRepo *RemindRepository) AddRemind(r Remind, ctx context.Context) (*mongo.InsertOneResult, error) {
 	rUUID, err := rRepo.collection.InsertOne(ctx, r)
 	if err != nil {
-		log.Printf("Can't push reminder to db: %+v", err)
+		return nil, err
 	}
 
-	return rUUID
+	return rUUID, nil
 }
 
 func (rRepo *RemindRepository) GetAllReminders(ctx context.Context) ([]Remind, error) {
@@ -54,18 +52,21 @@ func (rRepo *RemindRepository) GetAllReminders(ctx context.Context) ([]Remind, e
 
 	for cursor.Next(ctx) {
 		var reminder Remind
-		if err := cursor.Decode(&reminder); err != nil {
-			return nil, err
+		if curErr := cursor.Decode(&reminder); curErr != nil {
+			return nil, curErr
 		}
 		reminders = append(reminders, reminder)
+	}
+
+	if curErr := cursor.Err(); curErr != nil {
+		return nil, curErr
 	}
 
 	return reminders, nil
 }
 
-func StartReminderScheduler(remindRepo *RemindRepository, bot *tgbotapi.BotAPI) {
+func StartReminderScheduler(remindRepo *RemindRepository, bot *tgbotapi.BotAPI, ctx context.Context) {
 	c := cron.New()
-	ctx := context.Background()
 
 	go func() {
 		for {
