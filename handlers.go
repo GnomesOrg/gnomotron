@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flabergnomebot/service"
 	"log"
@@ -43,7 +44,7 @@ func (hm *HandlerManager) HandleHelp(update *tgbotapi.Update) error {
 	return nil
 }
 
-func (hm *HandlerManager) HandleNewRemind(update *tgbotapi.Update) error {
+func (hm *HandlerManager) HandleNewRemind(update *tgbotapi.Update, ctx context.Context) error {
 	m := update.Message.Text
 	r, err := ExtractRemindFromStr(m)
 	if err != nil {
@@ -55,10 +56,12 @@ func (hm *HandlerManager) HandleNewRemind(update *tgbotapi.Update) error {
 
 	r.ChatID = update.Message.Chat.ID
 
-	hm.RemindRep.AddRemind(*r)
+	hm.RemindRep.AddRemind(*r, ctx)
 
 	replyMsg := tgbotapi.NewMessage(r.ChatID, "Я запомнил!")
 	hm.Bot.Send(replyMsg)
+
+	return nil
 }
 
 func (hm *HandlerManager) HandleStart(update *tgbotapi.Update) {
@@ -71,10 +74,10 @@ func (hm *HandlerManager) HandleImage(update *tgbotapi.Update) error {
 	if isShouldReply(0.3) {
 		reactions := [...]string{
 			"Неприятное изображение",
-			"Глупое изображние",
-			"Смешное изображние",
-			"Философское изображние",
-			"Страшное изображние",
+			"Глупое изображение",
+			"Смешное изображение",
+			"Философское изображение",
+			"Страшное изображение",
 		}
 		replyText, err := hm.GptAdapter.AskGpt(
 			"Ты гном, говоришь на гномьем языке и отвечаешь от первого лица."+
@@ -93,10 +96,12 @@ func (hm *HandlerManager) HandleImage(update *tgbotapi.Update) error {
 	}
 
 	if isShouldReply(replyProbability) {
-		if _, err := hm.Bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "sperma :)")); err != nil {
+		if _, err := hm.Bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "siski :)")); err != nil {
 			return err
 		}
 	}
+
+	return nil
 }
 
 func (hm *HandlerManager) HandleEcho(update *tgbotapi.Update) error {
@@ -116,6 +121,8 @@ func (hm *HandlerManager) HandleEcho(update *tgbotapi.Update) error {
 			return err
 		}
 	}
+
+	return nil
 }
 
 func (hm *HandlerManager) HandleAskFlaber(update *tgbotapi.Update) error {
@@ -135,6 +142,8 @@ func (hm *HandlerManager) HandleAskFlaber(update *tgbotapi.Update) error {
 	if err != nil {
 		return err
 	}
+
+	return nil
 }
 
 func (hm *HandlerManager) HandleReply(update *tgbotapi.Update) error {

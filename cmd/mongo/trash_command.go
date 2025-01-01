@@ -21,13 +21,13 @@ type User struct {
 func main() {
 	clientOptions := options.Client().ApplyURI(MONGO_URI)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	client, err := mongo.Connect(ctx, clientOptions)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer cancel()
 
-	err = client.Ping(context.TODO(), nil)
+	err = client.Ping(ctx, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func main() {
 	res, _ := client.Database(MONGO_DB).Collection("users").InsertOne(ctx, user)
 	log.Println(res.InsertedID)
 
-	var ll User
-	err = client.Database(MONGO_DB).Collection("users").FindOne(ctx, bson.D{{"name", "xxx"}}).Decode(&ll)
-	log.Println(ll.Name)
+	var usr User
+	err = client.Database(MONGO_DB).Collection("users").FindOne(ctx, bson.D{{"name", "xxx"}}).Decode(&usr)
+	log.Println(usr.Name)
 }

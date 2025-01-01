@@ -27,17 +27,19 @@ func main() {
 	clientOptions := options.Client().ApplyURI(cfg.MONGO_URI)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	client, err := mongo.Connect(ctx, clientOptions)
+	defer cancel()
 	if err != nil {
 		log.Panic(err)
 	}
-	defer cancel()
 
 	collection := client.Database(cfg.MONGO_DB).Collection(service.RemindCollection)
 	remindRepo := service.NewRemindRepository(client, collection)
 	handlerManager := NewHandleManager(bot, adapter, remindRepo)
 	//DB init
 
-	go service.StartReminderScheduler(remindRepo, bot)
+	remCtx, remCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer remCancel()
+	go service.StartReminderScheduler(remindRepo, bot, remCtx)
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
 	u := tgbotapi.NewUpdate(0)
@@ -68,12 +70,10 @@ func main() {
 					case "af":
 						handlerManager.HandleAskFlaber(&update)
 					case "nr":
-						handlerManager.HandleNewRemind(&update)
+						handlerManager.HandleNewRemind(&update, remCtx)
 					default:
-						if update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.From.UserName == "GnomotronBot" {
+						if update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.From.UserName == cfg.BOT_NAME {
 							// handle only replies of gnomotron messages
-							// TODO: use id of the user
-							// TODO: get id or username from the config
 
 							handlerManager.HandleReply(&update)
 							continue
