@@ -56,7 +56,7 @@ func (hm *HandlerManager) HandleNewRemind(update *tgbotapi.Update, ctx context.C
 
 	r.ChatID = update.Message.Chat.ID
 
-	hm.RemindRep.AddRemind(*r, ctx)
+	hm.RemindRep.AddRemind(ctx, *r)
 
 	replyMsg := tgbotapi.NewMessage(r.ChatID, "Я запомнил!")
 	hm.Bot.Send(replyMsg)
@@ -81,7 +81,7 @@ func (hm *HandlerManager) HandleImage(update *tgbotapi.Update) error {
 		}
 		replyText, err := hm.GptAdapter.AskGpt(
 			"Ты гном, говоришь на гномьем языке и отвечаешь от первого лица."+
-				" Ты получил изображение. Тебе нужно его прокомментировать.",
+				" Ты получил изображение. Тебе нужно его коротко прокомментировать.",
 			reactions[rand.Intn(len(reactions))],
 		)
 		if err != nil {

@@ -14,6 +14,9 @@ services:
       GNOMOTRON_TELEGRAM_API_KEY: "${GNOMOTRON_TELEGRAM_API_KEY}"
       GNOMOTRON_MONGO_URI: "${GNOMOTRON_MONGO_URI}"
       GNOMOTRON_MONGO_DB: "${GNOMOTRON_MONGO_DB}"
+      BOT_NAME: "${BOT_NAME}"
+      GNOMOTRON_REMINDER_FETCH_SLEEPTIME: "${GNOMOTRON_REMINDER_FETCH_SLEEPTIME}"
+      GNOMOTRON_REMINDER_CHECK_SLEEPTIME: "${GNOMOTRON_REMINDER_CHECK_SLEEPTIME}"
     depends_on:
       - mongodb
 
@@ -24,6 +27,15 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: example
-      MONGO_INITDB_DATABASE: users
+      MONGO_INITDB_DATABASE: test
     volumes:
       - ./data/mongodb:/data/db
+
+  mongoclient:
+    image: mongoclient/mongoclient:latest
+    ports:
+      - "8081:3000"
+    environment:
+      MONGOCLIENT_SERVER: "{GNOMOTRON_MONGO_URI}"
+    depends_on:
+      - mongodb

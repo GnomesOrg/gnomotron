@@ -37,8 +37,7 @@ func main() {
 	handlerManager := NewHandleManager(bot, adapter, remindRepo)
 	//DB init
 
-	remCtx, remCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer remCancel()
+	remCtx := context.Background()
 	go service.StartReminderScheduler(remindRepo, bot, remCtx)
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 

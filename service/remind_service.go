@@ -9,6 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"time"
+	"sync"
 )
 
 const RemindCollection = "remind"
@@ -33,8 +34,9 @@ func NewRemindRepository(client *mongo.Client, collection *mongo.Collection) *Re
 	return &RemindRepository{client, collection}
 }
 
-func (rRepo *RemindRepository) AddRemind(r Remind, ctx context.Context) (*mongo.InsertOneResult, error) {
+func (rRepo *RemindRepository) AddRemind(ctx context.Context, r Remind) (*mongo.InsertOneResult, error) {
 	rUUID, err := rRepo.collection.InsertOne(ctx, r)
+	log.Println(r.Id, r.Message)
 	if err != nil {
 		return nil, err
 	}
@@ -67,6 +69,10 @@ func (rRepo *RemindRepository) GetAllReminders(ctx context.Context) ([]Remind, e
 
 func StartReminderScheduler(remindRepo *RemindRepository, bot *tgbotapi.BotAPI, ctx context.Context) {
 	c := cron.New()
+	defer c.Stop()
+
+	reminderMap := make(map[primitive.ObjectID]struct{})
+	var mu sync.Mutex
 
 	go func() {
 		for {
@@ -78,6 +84,12 @@ func StartReminderScheduler(remindRepo *RemindRepository, bot *tgbotapi.BotAPI, 
 			}
 
 			for _, reminder := range reminders {
+				mu.Lock()
+				if _, exists := reminderMap[reminder.Id]; exists {
+					mu.Unlock()
+					continue
+				}
+
 				_, err := c.AddFunc(reminder.Cron, func() {
 					msg := tgbotapi.NewMessage(reminder.ChatID, reminder.Message)
 					_, err := bot.Send(msg)
@@ -88,10 +100,13 @@ func StartReminderScheduler(remindRepo *RemindRepository, bot *tgbotapi.BotAPI, 
 
 				if err != nil {
 					log.Printf("Failed to schedule reminder: %v", err)
+				} else {
+					reminderMap[reminder.Id] = struct{}{}
 				}
+				mu.Unlock()
 			}
 
-			time.Sleep(15 * time.Minute)
+			time.Sleep(time.Minute)
 		}
 	}()
 
