@@ -43,8 +43,8 @@ func (g *GptAdapter) createRequestBody(model string, systemMsg string, userMsg s
 	return json.Marshal(requestData)
 }
 
-func (g *GptAdapter) AskGpt(systemMsg string, userMsg string) (string, error) {
-	body, err := g.createRequestBody("gpt-4o-mini", systemMsg, userMsg)
+func (g *GptAdapter) AskGpt(systemMsg, userMsg string) (string, error) {
+	body, err := g.createRequestBody("gpt-4o", systemMsg, userMsg)
 	if err != nil {
 		return "", fmt.Errorf("cannot create request body: %w", err)
 	}

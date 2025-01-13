@@ -71,7 +71,7 @@ func (hm *HandlerManager) HandleStart(update *tgbotapi.Update) {
 }
 
 func (hm *HandlerManager) HandleImage(update *tgbotapi.Update) error {
-	if isShouldReply(0.3) {
+	if isShouldReply(0.03) {
 		reactions := [...]string{
 			"Неприятное изображение",
 			"Глупое изображение",
