@@ -2,14 +2,15 @@ package service
 
 import (
 	"context"
+	"log"
+	"log/slog"
+	"time"
+
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/robfig/cron/v3"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"log"
-	"time"
-	"sync"
 )
 
 const RemindCollection = "remind"
@@ -17,6 +18,7 @@ const RemindCollection = "remind"
 type RemindRepository struct {
 	client     *mongo.Client
 	collection *mongo.Collection
+	l          *slog.Logger
 }
 
 type Remind struct {
@@ -30,8 +32,12 @@ func NewRemind(c string, m string, chatId int64) *Remind {
 	return &Remind{primitive.NewObjectID(), c, m, chatId}
 }
 
-func NewRemindRepository(client *mongo.Client, collection *mongo.Collection) *RemindRepository {
-	return &RemindRepository{client, collection}
+func NewRemindRepository(client *mongo.Client, collection *mongo.Collection, l *slog.Logger) *RemindRepository {
+	return &RemindRepository{
+		client:     client,
+		collection: collection,
+		l:          l,
+	}
 }
 
 func (rRepo *RemindRepository) AddRemind(ctx context.Context, r Remind) (*mongo.InsertOneResult, error) {
@@ -67,28 +73,26 @@ func (rRepo *RemindRepository) GetAllReminders(ctx context.Context) ([]Remind, e
 	return reminders, nil
 }
 
-func StartReminderScheduler(remindRepo *RemindRepository, bot *tgbotapi.BotAPI, ctx context.Context) {
+func (rr *RemindRepository) StartReminderScheduler(bot *tgbotapi.BotAPI, ctx context.Context) {
 	c := cron.New()
-	defer c.Stop()
 
 	reminderMap := make(map[primitive.ObjectID]struct{})
-	var mu sync.Mutex
 
 	go func() {
+		defer c.Stop()
 		for {
-			reminders, err := remindRepo.GetAllReminders(ctx)
+			rr.l.Debug("trying to fetch reminders")
+
+			reminders, err := rr.GetAllReminders(ctx)
 			if err != nil {
 				log.Printf("Failed to fetch reminders: %v", err)
 				time.Sleep(time.Minute)
 				continue
 			}
 
+			rr.l.Debug("fetched some reminders", slog.Any("count", len(reminders)))
+
 			for _, reminder := range reminders {
-				mu.Lock()
-				if _, exists := reminderMap[reminder.Id]; exists {
-					mu.Unlock()
-					continue
-				}
 
 				_, err := c.AddFunc(reminder.Cron, func() {
 					msg := tgbotapi.NewMessage(reminder.ChatID, reminder.Message)
@@ -102,8 +106,8 @@ func StartReminderScheduler(remindRepo *RemindRepository, bot *tgbotapi.BotAPI, 
 					log.Printf("Failed to schedule reminder: %v", err)
 				} else {
 					reminderMap[reminder.Id] = struct{}{}
+					rr.l.Debug("reminder added", slog.Any("id", reminder.Id))
 				}
-				mu.Unlock()
 			}
 
 			time.Sleep(time.Minute)

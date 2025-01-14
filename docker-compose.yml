@@ -8,6 +8,7 @@ services:
     working_dir: /app
     ports:
       - "8080:8080"
+      - "8055:8055"
     environment:
       GNOMOTRON_TELEGRAM_TOKEN: "${GNOMOTRON_TELEGRAM_TOKEN}"
       GNOMOTRON_TELEGRAM_CHAT_ID: "${GNOMOTRON_TELEGRAM_CHAT_ID}"

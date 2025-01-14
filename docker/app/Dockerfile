@@ -8,7 +8,7 @@ RUN go mod download
 
 COPY . .
 
-RUN go build -o flabergnomebot .
+RUN go build -o flabergnomebot ./cmd/gnomotron
 
 EXPOSE 8080
 
