@@ -33,6 +33,8 @@ func main() {
 	}
 
 	bot.Debug = true
+
+	//Command server
 	ch := commands.NewCommandHandler(bot)
 
 	http.HandleFunc("/sendMsg", ch.SendMsgCommand)
@@ -50,10 +52,12 @@ func main() {
 	collection := client.Database(cfg.MONGO_DB).Collection(service.RemindCollection)
 	remindRepo := service.NewRemindRepository(client, collection, l)
 	handlerManager := handlers.NewManager(bot, adapter, remindRepo, l)
-	//DB init
 
 	remCtx := context.Background()
+
+	//Remind service
 	go remindRepo.StartReminderScheduler(bot, remCtx)
+
 	l.Info(fmt.Sprintf("Authorized on account %s", bot.Self.UserName))
 
 	u := tgbotapi.NewUpdate(0)
@@ -84,7 +88,11 @@ func main() {
 					case "af":
 						err = handlerManager.HandleAskFlaber(&update)
 					case "nr":
-						err = handlerManager.HandleNewRemind(&update, remCtx)
+						err = handlerManager.HandleNewRemind(remCtx, &update)
+					case "lr":
+						err = handlerManager.HandleListRemind(remCtx, &update)
+					case "dr":
+						err = handlerManager.HandleDeleteRemind(remCtx, &update)
 					default:
 						if update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.From.UserName == cfg.BOT_NAME {
 							// handle only replies of gnomotron messages

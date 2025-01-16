@@ -9,10 +9,10 @@ import (
 	"log/slog"
 	"math/rand"
 	"regexp"
-	"strconv"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 const replyProbability = 0.02
@@ -36,9 +36,13 @@ func NewManager(bot *tgbotapi.BotAPI, adapter *gptadapter.GptAdapter, rRepo *ser
 func (hm *HandlerManager) HandleHelp(update *tgbotapi.Update) error {
 	replyMsg := tgbotapi.NewMessage(
 		update.Message.Chat.ID,
-		"Current chat id is: "+strconv.FormatInt(update.Message.Chat.ID, 10)+
-			" To create reminder: type"+
-			" /nr [{time in crontab format}] {body}",
+		fmt.Sprintf("Current chat id is: %d", int(update.Message.Chat.ID))+
+			"\n\rTo list reminders type"+
+			"\n\r/lr"+
+			"\n\rTo create reminder type"+
+			"\n\r/nr [{time in crontab format}] {body}"+
+			"\n\rTo delete reminder type"+
+			"\n\r/dr {remindId}",
 	)
 	replyMsg.ReplyToMessageID = update.Message.MessageID
 	if _, err := hm.bot.Send(replyMsg); err != nil {
@@ -48,22 +52,24 @@ func (hm *HandlerManager) HandleHelp(update *tgbotapi.Update) error {
 	return nil
 }
 
-func (hm *HandlerManager) HandleNewRemind(update *tgbotapi.Update, ctx context.Context) error {
-	m := update.Message.Text
+func (hm *HandlerManager) HandleNewRemind(ctx context.Context, u *tgbotapi.Update) error {
+	m := u.Message.Text
 	r, err := ExtractRemindFromStr(m)
 	if err != nil {
-		_, sendErr := hm.bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "У меня не получилось :("))
+		_, sendErr := hm.bot.Send(tgbotapi.NewMessage(u.Message.Chat.ID, "У меня не получилось :("))
 		if sendErr != nil {
 			return fmt.Errorf("cannot send msg via telegram api: %w", sendErr)
 		}
 	}
 
-	r.ChatID = update.Message.Chat.ID
+	r.ChatID = u.Message.Chat.ID
 
 	hm.remindRep.AddRemind(ctx, *r)
 
 	replyMsg := tgbotapi.NewMessage(r.ChatID, "Я запомнил!")
-	hm.bot.Send(replyMsg)
+	if _, err = hm.bot.Send(replyMsg); err != nil {
+		return fmt.Errorf("cannot send msg via telegram api: %w", err)
+	}
 
 	return nil
 }
@@ -183,6 +189,58 @@ func ExtractRemindFromStr(input string) (*service.Remind, error) {
 	}
 
 	return service.NewRemind(matches[1], matches[2], -1), nil
+}
+
+func (hm *HandlerManager) HandleListRemind(ctx context.Context, u *tgbotapi.Update) error {
+	rl, err := hm.remindRep.ListRemindByChat(ctx, u.Message.Chat.ID)
+	if err != nil {
+		return fmt.Errorf("cannot get remind list: %w", err)
+	}
+
+	if len(rl) == 0 {
+		replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, "У вас нет напоминаний")
+		if _, err = hm.bot.Send(replyMsg); err != nil {
+			return fmt.Errorf("cannot send msg via telegram api: %w", err)
+		}
+	}
+
+	var sb strings.Builder
+	for i := range rl {
+		sb.WriteString(fmt.Sprintf("\n\rId: %s, cron: %s, message: %s", rl[i].Id.Hex(), rl[i].Cron, rl[i].Message))
+	}
+
+	replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, sb.String())
+	if _, err = hm.bot.Send(replyMsg); err != nil {
+		return fmt.Errorf("cannot send msg via telegram api: %w", err)
+	}
+
+	return nil
+
+}
+
+func (hm *HandlerManager) HandleDeleteRemind(ctx context.Context, u *tgbotapi.Update) error {
+	const prefix = "/dr"
+    if !strings.HasPrefix(u.Message.Text, prefix) {
+        return fmt.Errorf("invalid command format: must start with %s", prefix)
+    }
+
+    msg := strings.TrimPrefix(u.Message.Text, prefix)
+    msg = strings.TrimSpace(msg)
+	rId, err := primitive.ObjectIDFromHex(msg)
+	if err != nil {
+		return fmt.Errorf("cannot get primitive id from hex: %w", err)
+	}
+	err = hm.remindRep.DeleteRemind(ctx, rId)
+	if err != nil {
+		return fmt.Errorf("cannot get remind: %w", err)
+	}
+
+	replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, fmt.Sprintf("Напоминание %s удалено", msg))
+	if _, err = hm.bot.Send(replyMsg); err != nil {
+		return fmt.Errorf("cannot send msg via telegram api: %w", err)
+	}
+
+	return nil
 }
 
 func isShouldReply(probability float32) bool {
