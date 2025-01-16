@@ -20,7 +20,7 @@ type RemindRepository struct {
 	collection *mongo.Collection
 	l          *slog.Logger
 	rMap       map[primitive.ObjectID]cron.EntryID
-	crS         []cron.EntryID
+	crS        []cron.EntryID
 }
 
 type Remind struct {
@@ -40,7 +40,7 @@ func NewRemindRepository(client *mongo.Client, collection *mongo.Collection, l *
 		collection: collection,
 		l:          l,
 		rMap:       make(map[primitive.ObjectID]cron.EntryID),
-		crS:         make([]cron.EntryID, 0),
+		crS:        make([]cron.EntryID, 0),
 	}
 }
 
@@ -137,9 +137,10 @@ func (rr *RemindRepository) DeleteRemind(ctx context.Context, id primitive.Objec
 	}
 
 	if result.DeletedCount == 0 {
-		rr.l.Debug("no reminders found with the given id", slog.Any("id", id))
+		rr.l.Warn("no reminders found with the given id", slog.Any("error", mongo.ErrNoDocuments))
 		return mongo.ErrNoDocuments
 	}
+
 	
 	rr.crS = append(rr.crS, rr.rMap[id])
 	delete(rr.rMap, id)
@@ -171,6 +172,5 @@ func (rr *RemindRepository) ListRemindByChat(ctx context.Context, id int64) ([]R
 		return nil, curErr
 	}
 
-	rr.l.Debug("rMap", slog.Any("rMap", rr.rMap))
 	return reminders, nil
 }
