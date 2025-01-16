@@ -1,7 +1,8 @@
 version: '3.8'
 
 services:
-  flabergnomebot:
+  gnomotron:
+    image: ghcr.io/${OWNER_LC}/gnomotron:latest
     build:
       context: .
       dockerfile: docker/app/Dockerfile

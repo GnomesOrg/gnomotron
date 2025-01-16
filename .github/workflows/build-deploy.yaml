@@ -6,7 +6,7 @@ on:
 
 jobs:
   build-push:
-    name: build docker image
+    name: build docker compose
     runs-on: ubuntu-20.04
     permissions:
       packages: write
@@ -31,9 +31,9 @@ jobs:
 
       - name: build and push the image
         run: |
-          docker image build -t 'ghcr.io/${{ env.OWNER_LC }}/gnomotron:${{ github.sha }}' -t 'ghcr.io/${{ env.OWNER_LC }}/gnomotron:latest' .
-          docker image push 'ghcr.io/${{ env.OWNER_LC }}/gnomotron:${{ github.sha }}'
-          docker image push 'ghcr.io/${{ env.OWNER_LC }}/gnomotron:latest'
+          docker compose build -t 'ghcr.io/${{ env.OWNER_LC }}/gnomotron:${{ github.sha }}' -t 'ghcr.io/${{ env.OWNER_LC }}/gnomotron:latest' .
+          docker compose push 'ghcr.io/${{ env.OWNER_LC }}/gnomotron:${{ github.sha }}'
+          docker compose push 'ghcr.io/${{ env.OWNER_LC }}/gnomotron:latest'
 
   deploy:
     name: pull and run the app
@@ -76,5 +76,10 @@ jobs:
             --name gnomotron \
             -e GNOMOTRON_TELEGRAM_API_KEY=${{ vars.GNOMOTRON_TELEGRAM_API_KEY }} \
             -e GNOMOTRON_TELEGRAM_TOKEN=${{ vars.GNOMOTRON_TELEGRAM_TOKEN }} \
-            -e GNOMOTRON_TELEGRAM_CHAT_ID=${{ vars.GNOMOTRON_TELEGRAM_CHAT_ID }} \
+            -e GNOMOTRON_MONGO_DB=${{ vars.GNOMOTRON_MONGO_DB }} \
+            -e MONGO_INITDB_ROOT_USERNAME="${{ vars.MONGO_INITDB_ROOT_USERNAME }}" \
+            -e MONGO_INITDB_ROOT_PASSWORD="${{ vars.MONGO_INITDB_ROOT_PASSWORD }}" \
+            -e MONGO_INITDB_DATABASE="${{ vars.MONGO_INITDB_DATABASE }}" \
+            -e BOT_NAME="${{ vars.BOT_NAME }}" \
+            -e GNOMOTRON_MONGO_URI="${{ vars.GNOMOTRON_MONGO_URI }}" \
             '${{ env.IMAGE_NAME }}'
