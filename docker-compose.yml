@@ -38,3 +38,6 @@ services:
       MONGOCLIENT_SERVER: "{GNOMOTRON_MONGO_URI}"
     depends_on:
       - mongodb
+
+volumes:
+  gnomotron-data: {}
