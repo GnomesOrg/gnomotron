@@ -1,7 +1,5 @@
 FROM golang:1.23.2-alpine
 
-ENV TZ=Asia/Yekaterinburg
-
 WORKDIR /app
 
 COPY go.mod go.sum ./
