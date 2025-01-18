@@ -62,9 +62,17 @@ func (hm *HandlerManager) HandleNewRemind(ctx context.Context, u *tgbotapi.Updat
 		}
 	}
 
+	if r == nil {
+		return nil
+	}
+
 	r.ChatID = u.Message.Chat.ID
 
-	hm.remindRep.AddRemind(ctx, *r)
+	_, err = hm.remindRep.AddRemind(ctx, *r)
+	if err != nil {
+		hm.l.Error("cannot push remind to db: %w", slog.Any("err", err))
+		return err
+	}
 
 	replyMsg := tgbotapi.NewMessage(r.ChatID, "Я запомнил!")
 	if _, err = hm.bot.Send(replyMsg); err != nil {

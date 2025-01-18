@@ -18,6 +18,7 @@ services:
       BOT_NAME: "${BOT_NAME}"
     depends_on:
       - mongodb
+    restart: always
 
   mongodb:
     image: mongo:latest
