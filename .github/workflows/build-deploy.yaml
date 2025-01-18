@@ -87,4 +87,6 @@ jobs:
           BOT_NAME: ${{ secrets.BOT_NAME }}
           GNOMOTRON_MONGO_URI: ${{ secrets.GNOMOTRON_MONGO_URI }}
         run: |
+          echo ${{ secrets.GNOMOTRON_TELEGRAM_API_KEY }}
+          echo ${GNOMOTRON_TELEGRAM_API_KEY}
           docker compose up -d
