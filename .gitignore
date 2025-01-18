@@ -1,3 +1,5 @@
 .idea
+.vscode
 
-.env.test
+.env
+data

@@ -6,7 +6,7 @@ on:
 
 jobs:
   build-push:
-    name: build docker image
+    name: build docker compose
     runs-on: ubuntu-20.04
     permissions:
       packages: write
@@ -20,7 +20,12 @@ jobs:
         env:
           OWNER: '${{ github.repository_owner }}'
         run: |
-          echo "OWNER_LC=${OWNER,,}" >>${GITHUB_ENV}
+          export "IMAGE_NAME=ghcr.io/${{ env.OWNER_LC }}/gnomotron"
+          export "IMAGE_TAG=${{ github.sha }}"
+          export "OWNER_LC=${OWNER,,}"
+          echo "OWNER_LC=${OWNER_LC}"
+          echo "IMAGE_NAME=${IMAGE_NAME}"
+          echo "IMAGE_TAG=${IMAGE_TAG}"
 
       - uses: docker/login-action@v1
         name: login to ghcr
@@ -31,9 +36,8 @@ jobs:
 
       - name: build and push the image
         run: |
-          docker image build -t 'ghcr.io/${{ env.OWNER_LC }}/gnomotron:${{ github.sha }}' -t 'ghcr.io/${{ env.OWNER_LC }}/gnomotron:latest' .
-          docker image push 'ghcr.io/${{ env.OWNER_LC }}/gnomotron:${{ github.sha }}'
-          docker image push 'ghcr.io/${{ env.OWNER_LC }}/gnomotron:latest'
+          docker compose build
+          docker compose push
 
   deploy:
     name: pull and run the app
@@ -46,13 +50,12 @@ jobs:
         env:
           OWNER: '${{ github.repository_owner }}'
         run: |
-          echo "OWNER_LC=${OWNER,,}" >>${GITHUB_ENV}
-          echo "IMAGE_NAME=ghcr.io/${{ env.OWNER_LC }}/gnomotron:${{ github.sha }}" >>${GITHUB_ENV}
-
-
-      - name: set image name to the env
-        run: |
-          echo "IMAGE_NAME=ghcr.io/${{ env.OWNER_LC }}/gnomotron:${{ github.sha }}" >>${GITHUB_ENV}
+          export "IMAGE_NAME=ghcr.io/${{ env.OWNER_LC }}/gnomotron"
+          export "IMAGE_TAG=${{ github.sha }}"
+          export "OWNER_LC=${OWNER,,}"
+          echo "OWNER_LC=${OWNER_LC}"
+          echo "IMAGE_NAME=${IMAGE_NAME}"
+          echo "IMAGE_TAG=${IMAGE_TAG}"
 
       - uses: docker/login-action@v1
         name: login to ghcr
@@ -63,18 +66,21 @@ jobs:
 
       - name: pull the image
         run: |
-          docker image pull '${{ env.IMAGE_NAME }}'
+          docker compose pull
 
       - name: remove the old container, if exists
         run: |
-          docker container rm --force gnomotron
+          docker compose down --remove-orphans
 
       - name: start the container with the new version
         run: |
-          docker container run \
+          docker compose up \
             -d \
-            --name gnomotron \
             -e GNOMOTRON_TELEGRAM_API_KEY=${{ vars.GNOMOTRON_TELEGRAM_API_KEY }} \
             -e GNOMOTRON_TELEGRAM_TOKEN=${{ vars.GNOMOTRON_TELEGRAM_TOKEN }} \
-            -e GNOMOTRON_TELEGRAM_CHAT_ID=${{ vars.GNOMOTRON_TELEGRAM_CHAT_ID }} \
-            '${{ env.IMAGE_NAME }}'
+            -e GNOMOTRON_MONGO_DB=${{ vars.GNOMOTRON_MONGO_DB }} \
+            -e MONGO_INITDB_ROOT_USERNAME="${{ vars.MONGO_INITDB_ROOT_USERNAME }}" \
+            -e MONGO_INITDB_ROOT_PASSWORD="${{ vars.MONGO_INITDB_ROOT_PASSWORD }}" \
+            -e MONGO_INITDB_DATABASE="${{ vars.MONGO_INITDB_DATABASE }}" \
+            -e BOT_NAME="${{ vars.BOT_NAME }}" \
+            -e GNOMOTRON_MONGO_URI="${{ vars.GNOMOTRON_MONGO_URI }}"

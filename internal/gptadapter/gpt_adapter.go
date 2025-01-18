@@ -1,11 +1,11 @@
-package main
+package gptadapter
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 )
 
@@ -13,6 +13,7 @@ type GptAdapter struct {
 	client   *http.Client
 	baseURL  string
 	apiToken string
+	l        *slog.Logger
 }
 
 type GptResponse struct {
@@ -23,15 +24,16 @@ type GptResponse struct {
 	} `json:"choices"`
 }
 
-func NewGptAdapter(apiToken string) *GptAdapter {
+func New(apiToken string, l *slog.Logger) *GptAdapter {
 	return &GptAdapter{
 		client:   &http.Client{},
 		baseURL:  "https://lk.neuroapi.host/v1/chat/completions",
 		apiToken: apiToken,
+		l:        l,
 	}
 }
 
-func (g *GptAdapter) createRequestBody(model, systemMsg, userMsg string) ([]byte, error) {
+func (g *GptAdapter) createRequestBody(model string, systemMsg string, userMsg string) ([]byte, error) {
 	requestData := map[string]interface{}{
 		"model": model,
 		"messages": []map[string]string{
@@ -73,7 +75,8 @@ func (g *GptAdapter) AskGpt(systemMsg, userMsg string) (string, error) {
 		return "", fmt.Errorf("cannot unmarshal gpt response %q as json: %w", string(responseBody), err)
 	}
 
-	log.Printf("GptResponse: %+v", res)
+	g.l.Debug("got gpt response", slog.Any("res", res))
+
 	if len(res.Choices) < 1 {
 		return "", fmt.Errorf("gpt couldn't answer the question, 0 choices were returned from server, the body is: %q", string(responseBody))
 	}
