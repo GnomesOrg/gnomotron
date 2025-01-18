@@ -77,14 +77,14 @@ jobs:
           docker compose down --remove-orphans
 
       - name: start the container with the new version
+        env:
+          GNOMOTRON_TELEGRAM_API_KEY: ${{ secrets.GNOMOTRON_TELEGRAM_API_KEY }}
+          GNOMOTRON_MONGO_DB: ${{ secrets.GNOMOTRON_MONGO_DB }}
+          MONGO_INITDB_ROOT_USERNAME: ${{ secrets.MONGO_INITDB_ROOT_USERNAME }}
+          GNOMOTRON_TELEGRAM_TOKEN: ${{ secrets.GNOMOTRON_TELEGRAM_TOKEN }}
+          MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}
+          MONGO_INITDB_DATABASE: ${{ secrets.MONGO_INITDB_DATABASE }}
+          BOT_NAME: ${{ secrets.BOT_NAME }}
+          GNOMOTRON_MONGO_URI: ${{ secrets.GNOMOTRON_MONGO_URI }}
         run: |
-          docker compose up \
-            -d \
-            -e GNOMOTRON_TELEGRAM_API_KEY=${{ vars.GNOMOTRON_TELEGRAM_API_KEY }} \
-            -e GNOMOTRON_TELEGRAM_TOKEN=${{ vars.GNOMOTRON_TELEGRAM_TOKEN }} \
-            -e GNOMOTRON_MONGO_DB=${{ vars.GNOMOTRON_MONGO_DB }} \
-            -e MONGO_INITDB_ROOT_USERNAME="${{ vars.MONGO_INITDB_ROOT_USERNAME }}" \
-            -e MONGO_INITDB_ROOT_PASSWORD="${{ vars.MONGO_INITDB_ROOT_PASSWORD }}" \
-            -e MONGO_INITDB_DATABASE="${{ vars.MONGO_INITDB_DATABASE }}" \
-            -e BOT_NAME="${{ vars.BOT_NAME }}" \
-            -e GNOMOTRON_MONGO_URI="${{ vars.GNOMOTRON_MONGO_URI }}"
+          docker compose up -d
