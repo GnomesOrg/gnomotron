@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   gnomotron:
-    image: ghcr.io/${OWNER_LC}/gnomotron:latest
+    image: ${IMAGE_NAME}:${IMAGE_TAG}
     build:
       context: .
       dockerfile: docker/app/Dockerfile
