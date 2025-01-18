@@ -46,6 +46,10 @@ jobs:
       - build-push
 
     steps:
+      - uses: actions/checkout@v2.3.4
+        with:
+          submodules: true
+
       - name: set lower case owner name
         env:
           OWNER: '${{ github.repository_owner }}'
