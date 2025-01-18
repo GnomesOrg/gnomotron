@@ -119,6 +119,7 @@ func (rr *RemindRepository) StartReminderScheduler(bot *tgbotapi.BotAPI, ctx con
 				c.Remove(ci)
 				rr.l.Debug("one of crones was removed", slog.Any("id", ci))
 			}
+			rr.crS = []cron.EntryID{}
 
 			time.Sleep(30 * time.Second)
 		}
