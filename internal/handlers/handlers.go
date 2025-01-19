@@ -55,14 +55,12 @@ func (hm *HandlerManager) HandleHelp(update *tgbotapi.Update) error {
 func (hm *HandlerManager) HandleNewRemind(ctx context.Context, u *tgbotapi.Update) error {
 	m := u.Message.Text
 	r, err := ExtractRemindFromStr(m)
-	if err != nil {
+	if err != nil || r == nil  {
 		_, sendErr := hm.bot.Send(tgbotapi.NewMessage(u.Message.Chat.ID, "У меня не получилось :("))
 		if sendErr != nil {
 			return fmt.Errorf("cannot send msg via telegram api: %w", sendErr)
 		}
-	}
 
-	if r == nil {
 		return nil
 	}
 
@@ -75,6 +73,7 @@ func (hm *HandlerManager) HandleNewRemind(ctx context.Context, u *tgbotapi.Updat
 	}
 
 	replyMsg := tgbotapi.NewMessage(r.ChatID, "Я запомнил!")
+	replyMsg.ReplyToMessageID = u.Message.MessageID
 	if _, err = hm.bot.Send(replyMsg); err != nil {
 		return fmt.Errorf("cannot send msg via telegram api: %w", err)
 	}
@@ -207,6 +206,7 @@ func (hm *HandlerManager) HandleListRemind(ctx context.Context, u *tgbotapi.Upda
 
 	if len(rl) == 0 {
 		replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, "У вас нет напоминаний")
+		replyMsg.ReplyToMessageID = u.Message.MessageID
 		if _, err = hm.bot.Send(replyMsg); err != nil {
 			return fmt.Errorf("cannot send msg via telegram api: %w", err)
 		}
@@ -218,6 +218,7 @@ func (hm *HandlerManager) HandleListRemind(ctx context.Context, u *tgbotapi.Upda
 	}
 
 	replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, sb.String())
+	replyMsg.ReplyToMessageID = u.Message.MessageID
 	if _, err = hm.bot.Send(replyMsg); err != nil {
 		return fmt.Errorf("cannot send msg via telegram api: %w", err)
 	}
@@ -244,6 +245,7 @@ func (hm *HandlerManager) HandleDeleteRemind(ctx context.Context, u *tgbotapi.Up
 	}
 
 	replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, fmt.Sprintf("Напоминание %s удалено", msg))
+	replyMsg.ReplyToMessageID = u.Message.MessageID
 	if _, err = hm.bot.Send(replyMsg); err != nil {
 		return fmt.Errorf("cannot send msg via telegram api: %w", err)
 	}
