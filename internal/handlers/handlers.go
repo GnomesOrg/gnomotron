@@ -20,15 +20,17 @@ const replyProbability = 0.02
 type HandlerManager struct {
 	bot        *tgbotapi.BotAPI
 	gptAdapter *gptadapter.GptAdapter
-	remindRep  *service.RemindRepository
+	rRepo      *service.RemindRepository
+	mRepo      *service.MessageRepository
 	l          *slog.Logger
 }
 
-func NewManager(bot *tgbotapi.BotAPI, adapter *gptadapter.GptAdapter, rRepo *service.RemindRepository, l *slog.Logger) *HandlerManager {
+func NewManager(bot *tgbotapi.BotAPI, adapter *gptadapter.GptAdapter, rRepo *service.RemindRepository, mRepo *service.MessageRepository, l *slog.Logger) *HandlerManager {
 	return &HandlerManager{
 		bot:        bot,
 		gptAdapter: adapter,
-		remindRep:  rRepo,
+		rRepo:      rRepo,
+		mRepo:      mRepo,
 		l:          l,
 	}
 }
@@ -55,7 +57,7 @@ func (hm *HandlerManager) HandleHelp(update *tgbotapi.Update) error {
 func (hm *HandlerManager) HandleNewRemind(ctx context.Context, u *tgbotapi.Update) error {
 	m := u.Message.Text
 	r, err := ExtractRemindFromStr(m)
-	if err != nil || r == nil  {
+	if err != nil || r == nil {
 		_, sendErr := hm.bot.Send(tgbotapi.NewMessage(u.Message.Chat.ID, "У меня не получилось :("))
 		if sendErr != nil {
 			return fmt.Errorf("cannot send msg via telegram api: %w", sendErr)
@@ -66,7 +68,7 @@ func (hm *HandlerManager) HandleNewRemind(ctx context.Context, u *tgbotapi.Updat
 
 	r.ChatID = u.Message.Chat.ID
 
-	_, err = hm.remindRep.AddRemind(ctx, *r)
+	_, err = hm.rRepo.AddRemind(ctx, *r)
 	if err != nil {
 		hm.l.Error("cannot push remind to db: %w", slog.Any("err", err))
 		return err
@@ -167,19 +169,69 @@ func (hm *HandlerManager) HandleAskFlaber(update *tgbotapi.Update) error {
 	return nil
 }
 
-func (hm *HandlerManager) HandleReply(update *tgbotapi.Update) error {
-	replyText, err := hm.gptAdapter.AskGpt("Ты получил сообщение из чата гномов."+
+func (hm *HandlerManager) HandleReply(ctx context.Context, u *tgbotapi.Update) error {
+	replyText, err := hm.gptAdapter.AskGpt("Ты читаешь чат гномов."+
 		" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
-		" Разговаривай как гном", update.Message.Text)
+		" Разговаривай как гном", u.Message.Text)
 	if err != nil {
 		return fmt.Errorf("cannot ask gpt: %w", err)
 	}
 
-	replyMsg := tgbotapi.NewMessage(update.Message.Chat.ID, replyText)
-	replyMsg.ReplyToMessageID = update.Message.MessageID
-	if _, err := hm.bot.Send(replyMsg); err != nil {
+	lastM, err := hm.mRepo.FindMessageByTelegramId(ctx, u.Message.ReplyToMessage.MessageID)
+	if err != nil {
+		return err
+	}
+
+	botM := service.NewMessage(
+		u.Message.ReplyToMessage.MessageID,
+		u.Message.ReplyToMessage.Text,
+		u.Message.Chat.ID,
+		[]service.Message{},
+		"Gnomotron",
+	)
+
+	var lastRepl []service.Message
+	if lastM != nil {
+		lastRepl = lastM.Replies
+		botM.Replies = append(botM.Replies, lastRepl...)
+	}
+
+	userM := service.NewMessage(
+		u.Message.MessageID,
+		u.Message.Text,
+		u.Message.Chat.ID,
+		[]service.Message{},
+		u.Message.From.UserName,
+	)
+
+	botM.Replies = append(botM.Replies, *userM)
+
+	replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, replyText)
+	replyMsg.ReplyToMessageID = u.Message.MessageID
+	gptM, err := hm.bot.Send(replyMsg)
+	if err != nil {
 		return fmt.Errorf("cannot send msg via telegram api: %w", err)
 	}
+
+	newBotMNoR := service.NewMessage(
+		gptM.MessageID,
+		gptM.Text,
+		gptM.Chat.ID,
+		[]service.Message{},
+		"Gnomotron",
+	)
+
+	botM.Replies = append(botM.Replies, *newBotMNoR)
+
+	newBotM := service.NewMessage(
+		gptM.MessageID,
+		gptM.Text,
+		gptM.Chat.ID,
+		botM.Replies,
+		"Gnomotron",
+	)
+
+	hm.mRepo.AddMessage(ctx, *newBotM)
 
 	return nil
 }
@@ -199,7 +251,7 @@ func ExtractRemindFromStr(input string) (*service.Remind, error) {
 }
 
 func (hm *HandlerManager) HandleListRemind(ctx context.Context, u *tgbotapi.Update) error {
-	rl, err := hm.remindRep.ListRemindByChat(ctx, u.Message.Chat.ID)
+	rl, err := hm.rRepo.ListRemindByChat(ctx, u.Message.Chat.ID)
 	if err != nil {
 		return fmt.Errorf("cannot get remind list: %w", err)
 	}
@@ -229,17 +281,17 @@ func (hm *HandlerManager) HandleListRemind(ctx context.Context, u *tgbotapi.Upda
 
 func (hm *HandlerManager) HandleDeleteRemind(ctx context.Context, u *tgbotapi.Update) error {
 	const prefix = "/dr"
-    if !strings.HasPrefix(u.Message.Text, prefix) {
-        return fmt.Errorf("invalid command format: must start with %s", prefix)
-    }
+	if !strings.HasPrefix(u.Message.Text, prefix) {
+		return fmt.Errorf("invalid command format: must start with %s", prefix)
+	}
 
-    msg := strings.TrimPrefix(u.Message.Text, prefix)
-    msg = strings.TrimSpace(msg)
+	msg := strings.TrimPrefix(u.Message.Text, prefix)
+	msg = strings.TrimSpace(msg)
 	rId, err := primitive.ObjectIDFromHex(msg)
 	if err != nil {
 		return fmt.Errorf("cannot get primitive id from hex: %w", err)
 	}
-	err = hm.remindRep.DeleteRemind(ctx, rId)
+	err = hm.rRepo.DeleteRemind(ctx, rId)
 	if err != nil {
 		return fmt.Errorf("cannot get remind: %w", err)
 	}

@@ -33,7 +33,7 @@ func New(apiToken string, l *slog.Logger) *GptAdapter {
 	}
 }
 
-func (g *GptAdapter) createRequestBody(model string, systemMsg string, userMsg string) ([]byte, error) {
+func (g *GptAdapter) createSingleRequestBody(model string, systemMsg string, userMsg string) ([]byte, error) {
 	requestData := map[string]interface{}{
 		"model": model,
 		"messages": []map[string]string{
@@ -46,7 +46,7 @@ func (g *GptAdapter) createRequestBody(model string, systemMsg string, userMsg s
 }
 
 func (g *GptAdapter) AskGpt(systemMsg, userMsg string) (string, error) {
-	body, err := g.createRequestBody("gpt-4o", systemMsg, userMsg)
+	body, err := g.createSingleRequestBody("gpt-4o", systemMsg, userMsg)
 	if err != nil {
 		return "", fmt.Errorf("cannot create request body: %w", err)
 	}

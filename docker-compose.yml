@@ -16,6 +16,7 @@ services:
       GNOMOTRON_MONGO_URI: "${GNOMOTRON_MONGO_URI}"
       GNOMOTRON_MONGO_DB: "${GNOMOTRON_MONGO_DB}"
       BOT_NAME: "${BOT_NAME}"
+      MAX_DIALOGUE_SIZE: "${MAX_DIALOGUE_SIZE}"
     depends_on:
       - mongodb
     restart: always
