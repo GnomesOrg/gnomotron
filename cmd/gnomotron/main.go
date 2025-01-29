@@ -26,7 +26,7 @@ func main() {
 	}
 	l := slog.New(slog.NewJSONHandler(os.Stdout, loggerOptions))
 	cfg := config.LoadConfig()
-	adapter := gptadapter.New(cfg.APIKEY, l)
+	adapter := gptadapter.New(cfg.APIKEY, l, cfg.BOT_NAME)
 	bot, err := tgbotapi.NewBotAPI(cfg.TOKEN)
 	if err != nil {
 		l.Error("error on bot init", slog.Any("error", err))
@@ -53,7 +53,7 @@ func main() {
 	mCol := client.Database(cfg.MONGO_DB).Collection(service.MessageCollection)
 	remindRepo := service.NewRemindRepository(rCol, l)
 	mRepo := service.NewMessageRepository(mCol, l, cfg)
-	handlerManager := handlers.NewManager(bot, adapter, remindRepo, mRepo, l)
+	handlerManager := handlers.New(bot, adapter, remindRepo, mRepo, l, cfg.BOT_NAME)
 
 	botCtx := context.Background()
 

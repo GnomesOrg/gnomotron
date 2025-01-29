@@ -19,8 +19,9 @@ func NewCommandHandler(b *tgbotapi.BotAPI) *CommandHandler {
 }
 
 type SendMsgReq struct {
-	Msg    string `json:"msg"`
-	ChatId int64  `json:"chatId"`
+	Msg     string `json:"msg"`
+	ChatId  int64  `json:"chatId"`
+	ReplyId int    `json:"replyId"`
 }
 
 func (ch *CommandHandler) SendMsgCommand(w http.ResponseWriter, r *http.Request) {
@@ -36,8 +37,13 @@ func (ch *CommandHandler) SendMsgCommand(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	ch.bot.Send(tgbotapi.NewMessage(res.ChatId, res.Msg))
-
+	if res.ReplyId == -1 {
+		ch.bot.Send(tgbotapi.NewMessage(res.ChatId, res.Msg))
+	} else {
+		newM := tgbotapi.NewMessage(res.ChatId, res.Msg)
+		newM.ReplyToMessageID = res.ReplyId
+		ch.bot.Send(newM)
+	}
 	w.WriteHeader(http.StatusCreated)
 
 	fmt.Fprintf(w, "done. msg: %s\n", res.Msg)

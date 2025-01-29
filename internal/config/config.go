@@ -2,8 +2,8 @@ package config
 
 import (
 	"log"
-	"os"
-	"strconv"
+	"strings"
+	"github.com/spf13/viper"
 )
 
 type Config struct {
@@ -16,17 +16,25 @@ type Config struct {
 }
 
 func LoadConfig() *Config {
-	cfg := Config{}
-	cfg.TOKEN = os.Getenv("GNOMOTRON_TELEGRAM_TOKEN")
-	cfg.APIKEY = os.Getenv("GNOMOTRON_TELEGRAM_API_KEY")
-	cfg.MONGO_URI = os.Getenv("GNOMOTRON_MONGO_URI")
-	cfg.MONGO_DB = os.Getenv("GNOMOTRON_MONGO_DB")
-	cfg.BOT_NAME = os.Getenv("BOT_NAME")
-	cfg.MAX_DIALOGUE_SIZE, _ = strconv.Atoi(os.Getenv("MAX_DIALOGUE_SIZE"))
+	viper.SetConfigName("config")
+	viper.SetConfigType("yaml")
+	viper.AddConfigPath("/app")
+	viper.ReadInConfig()
 
-	if cfg.TOKEN == "" || cfg.APIKEY == "" || cfg.MONGO_URI == "" || cfg.MONGO_DB == "" || cfg.BOT_NAME == "" || cfg.MAX_DIALOGUE_SIZE <= 0 {
-		log.Panic("All config fields must be specified via the environment variables")
+	viper.AutomaticEnv()
+
+	viper.SetEnvKeyReplacer(strings.NewReplacer(
+		"GNOMOTRON_TELEGRAM_TOKEN", "TOKEN",
+		"GNOMOTRON_TELEGRAM_API_KEY", "APIKEY",
+		"GNOMOTRON_MONGO_URI", "MONGO_URI",
+		"GNOMOTRON_MONGO_DB", "MONGO_DB",
+		"BOT_NAME", "BOT_NAME",
+	))
+
+	cfg := &Config{}
+	if err := viper.Unmarshal(cfg); err != nil {
+		log.Panicf("Failed to load config: %v", err)
 	}
 
-	return &cfg
+	return cfg
 }
