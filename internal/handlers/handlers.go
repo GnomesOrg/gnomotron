@@ -186,7 +186,7 @@ func (hm *HandlerManager) HandleReply(ctx context.Context, u *tgbotapi.Update) e
 	replyText, err := hm.gptAdapter.AskGpt("Ты читаешь чат гномов."+
 		" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
 		" Разговаривай как гном"+
-		" Формат ответа - только текст"+
+		" Формат ответа - ТОЛЬКО ТЕКСТ. КАК БУДТО ТЫ ОТВЕЧАЕШЬ, НЕ ПОДПИСЫВАЙ СЕБЯ"+
 		"", *botM)
 	if err != nil {
 		return fmt.Errorf("cannot ask gpt: %w", err)

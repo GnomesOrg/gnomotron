@@ -2,7 +2,7 @@ package config
 
 import (
 	"log"
-	"strings"
+
 	"github.com/spf13/viper"
 )
 
@@ -19,17 +19,16 @@ func LoadConfig() *Config {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath("/app")
-	viper.ReadInConfig()
 
-	viper.AutomaticEnv()
+	if err := viper.ReadInConfig(); err != nil {
+		log.Printf("Warning: No config file found, relying on environment variables: %v", err)
+	}
 
-	viper.SetEnvKeyReplacer(strings.NewReplacer(
-		"GNOMOTRON_TELEGRAM_TOKEN", "TOKEN",
-		"GNOMOTRON_TELEGRAM_API_KEY", "APIKEY",
-		"GNOMOTRON_MONGO_URI", "MONGO_URI",
-		"GNOMOTRON_MONGO_DB", "MONGO_DB",
-		"BOT_NAME", "BOT_NAME",
-	))
+	viper.BindEnv("TOKEN", "GNOMOTRON_TELEGRAM_TOKEN")
+	viper.BindEnv("APIKEY", "GNOMOTRON_TELEGRAM_API_KEY")
+	viper.BindEnv("MONGO_URI", "GNOMOTRON_MONGO_URI")
+	viper.BindEnv("MONGO_DB", "GNOMOTRON_MONGO_DB")
+	viper.BindEnv("BOT_NAME", "BOT_NAME")
 
 	cfg := &Config{}
 	if err := viper.Unmarshal(cfg); err != nil {
