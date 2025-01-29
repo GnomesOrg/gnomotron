@@ -36,7 +36,7 @@ func New(apiToken string, l *slog.Logger, botName string) *GptAdapter {
 	}
 }
 
-func (g *GptAdapter) createSingleRequestBody(model string, systemMsg string, userMsg service.Message) ([]byte, error) {
+func (g *GptAdapter) createRequestBody(model string, systemMsg string, userMsg service.Message) ([]byte, error) {
 	ms := []map[string]string{
 		{"role": "system", "content": systemMsg},
 	}
@@ -52,7 +52,7 @@ func (g *GptAdapter) createSingleRequestBody(model string, systemMsg string, use
 		} else if r.Uname == g.botName {
 			newM = map[string]string{
 				"role":    "assistant",
-				"content": r.Uname + ": " + r.Body,
+				"content": r.Body,
 			}
 		}
 		ms = append(ms, newM)
@@ -69,7 +69,7 @@ func (g *GptAdapter) createSingleRequestBody(model string, systemMsg string, use
 }
 
 func (g *GptAdapter) AskGpt(systemMsg string, userMsg service.Message) (string, error) {
-	body, err := g.createSingleRequestBody("gpt-4o", systemMsg, userMsg)
+	body, err := g.createRequestBody("gpt-4o", systemMsg, userMsg)
 	if err != nil {
 		return "", fmt.Errorf("cannot create request body: %w", err)
 	}
