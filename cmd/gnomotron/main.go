@@ -26,7 +26,7 @@ func main() {
 	}
 	l := slog.New(slog.NewJSONHandler(os.Stdout, loggerOptions))
 	cfg := config.LoadConfig()
-	adapter := gptadapter.New(cfg.APIKEY, l)
+	adapter := gptadapter.New(cfg.APIKEY, l, cfg.BOT_NAME)
 	bot, err := tgbotapi.NewBotAPI(cfg.TOKEN)
 	if err != nil {
 		l.Error("error on bot init", slog.Any("error", err))
@@ -49,14 +49,16 @@ func main() {
 		l.Error("error on connect to mongo", slog.Any("error", err))
 	}
 
-	collection := client.Database(cfg.MONGO_DB).Collection(service.RemindCollection)
-	remindRepo := service.NewRemindRepository(client, collection, l)
-	handlerManager := handlers.NewManager(bot, adapter, remindRepo, l)
+	rCol := client.Database(cfg.MONGO_DB).Collection(service.RemindCollection)
+	mCol := client.Database(cfg.MONGO_DB).Collection(service.MessageCollection)
+	remindRepo := service.NewRemindRepository(rCol, l)
+	mRepo := service.NewMessageRepository(mCol, l, cfg)
+	handlerManager := handlers.New(bot, adapter, remindRepo, mRepo, l, cfg.BOT_NAME)
 
-	remCtx := context.Background()
+	botCtx := context.Background()
 
 	//Remind service
-	go remindRepo.StartReminderScheduler(bot, remCtx)
+	go remindRepo.StartReminderScheduler(bot, botCtx)
 
 	l.Info(fmt.Sprintf("Authorized on account %s", bot.Self.UserName))
 
@@ -88,16 +90,16 @@ func main() {
 					case "af":
 						err = handlerManager.HandleAskFlaber(&update)
 					case "nr":
-						err = handlerManager.HandleNewRemind(remCtx, &update)
+						err = handlerManager.HandleNewRemind(botCtx, &update)
 					case "lr":
-						err = handlerManager.HandleListRemind(remCtx, &update)
+						err = handlerManager.HandleListRemind(botCtx, &update)
 					case "dr":
-						err = handlerManager.HandleDeleteRemind(remCtx, &update)
+						err = handlerManager.HandleDeleteRemind(botCtx, &update)
 					default:
 						if update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.From.UserName == cfg.BOT_NAME {
 							// handle only replies of gnomotron messages
 
-							err = handlerManager.HandleReply(&update)
+							err = handlerManager.HandleReply(botCtx, &update)
 							break
 						}
 

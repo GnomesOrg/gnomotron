@@ -16,7 +16,6 @@ import (
 const RemindCollection = "remind"
 
 type RemindRepository struct {
-	client     *mongo.Client
 	collection *mongo.Collection
 	l          *slog.Logger
 	rMap       map[primitive.ObjectID]cron.EntryID
@@ -34,9 +33,8 @@ func NewRemind(c string, m string, chatId int64) *Remind {
 	return &Remind{primitive.NewObjectID(), c, m, chatId}
 }
 
-func NewRemindRepository(client *mongo.Client, collection *mongo.Collection, l *slog.Logger) *RemindRepository {
+func NewRemindRepository(collection *mongo.Collection, l *slog.Logger) *RemindRepository {
 	return &RemindRepository{
-		client:     client,
 		collection: collection,
 		l:          l,
 		rMap:       make(map[primitive.ObjectID]cron.EntryID),

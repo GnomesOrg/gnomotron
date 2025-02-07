@@ -11,35 +11,37 @@ import (
 )
 
 func main() {
-    chatId := flag.Int64("c", -1, "chat id")
-    msg := flag.String("m", "", "message body")
-    url := flag.String("u", "", "url")
+	chatId := flag.Int64("c", -1, "chat id")
+	msg := flag.String("m", "", "message body")
+	url := flag.String("u", "", "url")
+	replyId := flag.Int("r", -1, "reply id")
 
-    flag.Parse()
+	flag.Parse()
 
-    *url = *url + "/sendMsg"
+	*url = *url + "/sendMsg"
 
-    req := commands.SendMsgReq{
-    	Msg:    *msg,
-    	ChatId: *chatId,
-    }
+	req := commands.SendMsgReq{
+		Msg:     *msg,
+		ChatId:  *chatId,
+		ReplyId: *replyId,
+	}
 
-    data, err := json.Marshal(req)
-    if err != nil {
-        panic(err)
-    }
+	data, err := json.Marshal(req)
+	if err != nil {
+		panic(err)
+	}
 
-    resp, err := http.Post(*url, "application/json", bytes.NewReader(data))
-    if err != nil {
-        panic(err)
-    }
-    defer resp.Body.Close()
+	resp, err := http.Post(*url, "application/json", bytes.NewReader(data))
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
 
-    b, err := io.ReadAll(resp.Body)
-    if err != nil {
-        panic(err)
-    }
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		panic(err)
+	}
 
-    fmt.Println("Response status:", resp.Status)
-    fmt.Println("Response body:", string(b))
+	fmt.Println("Response status:", resp.Status)
+	fmt.Println("Response body:", string(b))
 }
