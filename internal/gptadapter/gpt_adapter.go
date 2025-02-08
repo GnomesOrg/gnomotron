@@ -10,6 +10,11 @@ import (
 	"net/http"
 )
 
+type GptConfig struct {
+	ApiToken string
+	BotName string
+}
+
 type GptAdapter struct {
 	client   *http.Client
 	baseURL  string
@@ -26,13 +31,13 @@ type GptResponse struct {
 	} `json:"choices"`
 }
 
-func New(apiToken string, l *slog.Logger, botName string) *GptAdapter {
+func New(l *slog.Logger, gcfg *GptConfig) *GptAdapter {
 	return &GptAdapter{
 		client:   &http.Client{},
 		baseURL:  "https://lk.neuroapi.host/v1/chat/completions",
-		apiToken: apiToken,
+		apiToken: gcfg.ApiToken,
 		l:        l,
-		botName:  botName,
+		botName:  gcfg.BotName,
 	}
 }
 

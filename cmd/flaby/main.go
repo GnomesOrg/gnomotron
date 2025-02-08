@@ -8,17 +8,24 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"os"
 )
 
 func main() {
 	chatId := flag.Int64("c", -1, "chat id")
 	msg := flag.String("m", "", "message body")
-	url := flag.String("u", "", "url")
+	u := flag.String("u", "", "url")
 	replyId := flag.Int("r", -1, "reply id")
 
 	flag.Parse()
 
-	*url = *url + "/sendMsg"
+	ur, err := url.Parse(*u);
+	if err != nil {
+		fmt.Println("error on parsing url")
+		os.Exit(1)
+	}
+	ur = ur.JoinPath("/sendMsg")
 
 	req := commands.SendMsgReq{
 		Msg:     *msg,
@@ -31,7 +38,7 @@ func main() {
 		panic(err)
 	}
 
-	resp, err := http.Post(*url, "application/json", bytes.NewReader(data))
+	resp, err := http.Post(ur.String(), "application/json", bytes.NewReader(data))
 	if err != nil {
 		panic(err)
 	}

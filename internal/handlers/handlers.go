@@ -134,7 +134,10 @@ func (hm *HandlerManager) HandleEcho(u *tgbotapi.Update) error {
 }
 
 func (hm *HandlerManager) HandleAskFlaber(u *tgbotapi.Update) error {
+	sm := service.NewMessage(u.Message.MessageID, strings.TrimPrefix(u.Message.Text, "/af"), u.Message.Chat.ID, []service.Message{}, u.Message.From.UserName)
 	m := service.NewMessage(u.Message.MessageID, strings.TrimPrefix(u.Message.Text, "/af"), u.Message.Chat.ID, []service.Message{}, u.Message.From.UserName)
+	m.Replies = append(m.Replies, *sm)
+	
 	replyText, err := hm.gptAdapter.AskGpt("Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
 		" Разговаривай как гном"+
 		" ВАЖНО ОТВЕЧАТЬ ОТ ПЕРВОГО ЛИЦА", *m)
