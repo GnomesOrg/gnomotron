@@ -3,6 +3,7 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -12,7 +13,7 @@ type CommandHandler struct {
 	bot *tgbotapi.BotAPI
 }
 
-func NewCommandHandler(b *tgbotapi.BotAPI) *CommandHandler {
+func NewCommandHandler(l *slog.Logger, b *tgbotapi.BotAPI) *CommandHandler {
 	return &CommandHandler{
 		bot: b,
 	}
@@ -21,7 +22,7 @@ func NewCommandHandler(b *tgbotapi.BotAPI) *CommandHandler {
 type SendMsgReq struct {
 	Msg     string `json:"msg"`
 	ChatId  int64  `json:"chatId"`
-	ReplyId int    `json:"replyId"`
+	ReplyId *int    `json:"replyId"`
 }
 
 func (ch *CommandHandler) SendMsgCommand(w http.ResponseWriter, r *http.Request) {
@@ -37,13 +38,16 @@ func (ch *CommandHandler) SendMsgCommand(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if res.ReplyId == -1 {
-		ch.bot.Send(tgbotapi.NewMessage(res.ChatId, res.Msg))
+	m := tgbotapi.MessageConfig{}
+
+	if res.ReplyId == nil {
+		m = tgbotapi.NewMessage(res.ChatId, res.Msg)
 	} else {
-		newM := tgbotapi.NewMessage(res.ChatId, res.Msg)
-		newM.ReplyToMessageID = res.ReplyId
-		ch.bot.Send(newM)
+		m = tgbotapi.NewMessage(res.ChatId, res.Msg)
+		m.ReplyToMessageID = *res.ReplyId
+		
 	}
+	ch.bot.Send(m)
 	w.WriteHeader(http.StatusCreated)
 
 	fmt.Fprintf(w, "done. msg: %s\n", res.Msg)

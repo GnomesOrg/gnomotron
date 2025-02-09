@@ -36,7 +36,7 @@ func main() {
 	bot.Debug = true
 
 	//Command server
-	ch := commands.NewCommandHandler(bot)
+	ch := commands.NewCommandHandler(l, bot)
 
 	http.HandleFunc("/sendMsg", ch.SendMsgCommand)
 	go http.ListenAndServe(":8055", nil)
@@ -117,6 +117,20 @@ func main() {
 
 					if err != nil {
 						l.Error(fmt.Sprintf("error while handling messages: %+v", err))
+					}
+				}
+
+				if update.CallbackQuery != nil {
+					l.Debug(fmt.Sprintf("callbackQuery from [%s]: %s", update.CallbackQuery.From.UserName, update.CallbackQuery.Data))
+	
+					err := handlerManager.HandleDeleteRemind(botCtx, &update)
+					if err != nil {
+						l.Error(fmt.Sprintf("error while handling callback query: %+v", err))
+					}
+	
+					callback := tgbotapi.NewCallback(update.CallbackQuery.ID, "Обработано")
+					if _, err := bot.Request(callback); err != nil {
+						l.Error(fmt.Sprintf("error sending callback response: %+v", err))
 					}
 				}
 			}
