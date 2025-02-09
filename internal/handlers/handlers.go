@@ -251,44 +251,80 @@ func (hm *HandlerManager) HandleListRemind(ctx context.Context, u *tgbotapi.Upda
 		if _, err = hm.bot.Send(replyMsg); err != nil {
 			return fmt.Errorf("cannot send msg via telegram api: %w", err)
 		}
+		return nil
 	}
 
-	var sb strings.Builder
-	for i := range rl {
-		sb.WriteString(fmt.Sprintf("\n\rId: %s, cron: %s, message: %s", rl[i].Id.Hex(), rl[i].Cron, rl[i].Message))
+	var buttons [][]tgbotapi.InlineKeyboardButton
+	for _, remind := range rl {
+		button := tgbotapi.NewInlineKeyboardButtonData(
+			fmt.Sprintf("🕒 %s - %s", remind.Cron, remind.Message),
+			fmt.Sprintf("delete_%s", remind.Id.Hex()),
+		)
+		buttons = append(buttons, tgbotapi.NewInlineKeyboardRow(button))
 	}
 
-	replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, sb.String())
+	replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, "Ваши напоминания:")
+	replyMsg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(buttons...)
 	replyMsg.ReplyToMessageID = u.Message.MessageID
+
 	if _, err = hm.bot.Send(replyMsg); err != nil {
 		return fmt.Errorf("cannot send msg via telegram api: %w", err)
 	}
 
 	return nil
-
 }
 
 func (hm *HandlerManager) HandleDeleteRemind(ctx context.Context, u *tgbotapi.Update) error {
-	const prefix = "/dr"
-	if !strings.HasPrefix(u.Message.Text, prefix) {
-		return fmt.Errorf("invalid command format: must start with %s", prefix)
+	if u.CallbackQuery == nil {
+		return fmt.Errorf("callback query is nil")
 	}
 
-	msg := strings.TrimPrefix(u.Message.Text, prefix)
-	msg = strings.TrimSpace(msg)
-	rId, err := primitive.ObjectIDFromHex(msg)
-	if err != nil {
-		return fmt.Errorf("cannot get primitive id from hex: %w", err)
+	data := u.CallbackQuery.Data
+	const prefix = "delete_"
+	if !strings.HasPrefix(data, prefix) {
+		return fmt.Errorf("invalid callback data: %s", data)
 	}
+
+	remindID := strings.TrimPrefix(data, prefix)
+	rId, err := primitive.ObjectIDFromHex(remindID)
+	if err != nil {
+		return fmt.Errorf("cannot parse remind ID: %w", err)
+	}
+
 	err = hm.rRepo.DeleteRemind(ctx, rId)
 	if err != nil {
-		return fmt.Errorf("cannot get remind: %w", err)
+		return fmt.Errorf("cannot delete remind: %w", err)
 	}
 
-	replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, fmt.Sprintf("Напоминание %s удалено", msg))
-	replyMsg.ReplyToMessageID = u.Message.MessageID
-	if _, err = hm.bot.Send(replyMsg); err != nil {
-		return fmt.Errorf("cannot send msg via telegram api: %w", err)
+	rl, err := hm.rRepo.ListRemindByChat(ctx, u.CallbackQuery.Message.Chat.ID)
+	if err != nil {
+		return fmt.Errorf("cannot get updated remind list: %w", err)
+	}
+
+	var buttons [][]tgbotapi.InlineKeyboardButton
+	for _, remind := range rl {
+		button := tgbotapi.NewInlineKeyboardButtonData(
+			fmt.Sprintf("🕒 %s - %s", remind.Cron, remind.Message),
+			fmt.Sprintf("delete_%s", remind.Id.Hex()),
+		)
+		buttons = append(buttons, tgbotapi.NewInlineKeyboardRow(button))
+	}
+
+	if len(rl) == 0 {
+		editMsg := tgbotapi.NewEditMessageText(u.CallbackQuery.Message.Chat.ID, u.CallbackQuery.Message.MessageID, "У вас нет напоминаний")
+		if _, err := hm.bot.Send(editMsg); err != nil {
+			return fmt.Errorf("cannot edit message: %w", err)
+		}
+	} else {
+		editMsg := tgbotapi.NewEditMessageReplyMarkup(u.CallbackQuery.Message.Chat.ID, u.CallbackQuery.Message.MessageID, tgbotapi.NewInlineKeyboardMarkup(buttons...))
+		if _, err := hm.bot.Send(editMsg); err != nil {
+			return fmt.Errorf("cannot update keyboard: %w", err)
+		}
+	}
+
+	callback := tgbotapi.NewCallback(u.CallbackQuery.ID, "Напоминание удалено ✅")
+	if _, err := hm.bot.Request(callback); err != nil {
+		return fmt.Errorf("cannot send callback response: %w", err)
 	}
 
 	return nil

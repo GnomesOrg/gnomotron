@@ -16,11 +16,16 @@ func main() {
 	chatId := flag.Int64("c", -1, "chat id")
 	msg := flag.String("m", "", "message body")
 	u := flag.String("u", "", "url")
-	replyId := flag.Int("r", -1, "reply id")
-
+	replyIdVal := flag.Int("r", -1, "reply id")
+	
 	flag.Parse()
+	
+	var replyId *int
+	if *replyIdVal != -1 {
+		replyId = replyIdVal
+	}
 
-	ur, err := url.Parse(*u);
+	ur, err := url.Parse(*u)
 	if err != nil {
 		fmt.Println("error on parsing url")
 		os.Exit(1)
@@ -30,7 +35,7 @@ func main() {
 	req := commands.SendMsgReq{
 		Msg:     *msg,
 		ChatId:  *chatId,
-		ReplyId: *replyId,
+		ReplyId: replyId,
 	}
 
 	data, err := json.Marshal(req)
