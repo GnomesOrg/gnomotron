@@ -114,7 +114,10 @@ func (hm *HandlerManager) HandleImage(update *tgbotapi.Update) error {
 
 func (hm *HandlerManager) HandleEcho(u *tgbotapi.Update) error {
 	if isShouldReply(replyProbability) && len(u.Message.Text) > 40 {
+		sm := service.NewMessage(u.Message.MessageID, u.Message.Text, u.Message.Chat.ID, []service.Message{}, u.Message.From.UserName)
 		m := service.NewMessage(u.Message.MessageID, u.Message.Text, u.Message.Chat.ID, []service.Message{}, u.Message.From.UserName)
+		m.Replies = append(m.Replies, *sm)
+
 		replyText, err := hm.gptAdapter.AskGpt("Ты получил сообщение из чата гномов вне контекста."+
 			" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
 			" Разговаривай как гном"+
