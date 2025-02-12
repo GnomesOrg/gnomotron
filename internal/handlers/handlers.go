@@ -105,14 +105,16 @@ func (hm *HandlerManager) HandleImage(update *tgbotapi.Update) error {
 			"Я обожаю сиськи",
 		}
 		randomIndex := rand.Intn(len(responses))
-		if _, err := hm.bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, responses[randomIndex])); err != nil {
+		resp := tgbotapi.NewMessage(update.Message.Chat.ID, responses[randomIndex])
+		resp.ReplyToMessageID = update.Message.MessageID
+		if _, err := hm.bot.Send(resp); err != nil {
 			return fmt.Errorf("cannot send msg via telegram api: %w", err)
 		}
 	}
 	return nil
 }
 
-func (hm *HandlerManager) HandleEcho(u *tgbotapi.Update) error {
+func (hm *HandlerManager) HandleEcho(ctx context.Context, u *tgbotapi.Update) error {
 	if isShouldReply(replyProbability) && len(u.Message.Text) > 40 {
 		sm := service.NewMessage(u.Message.MessageID, u.Message.Text, u.Message.Chat.ID, []service.Message{}, u.Message.From.UserName)
 		m := service.NewMessage(u.Message.MessageID, u.Message.Text, u.Message.Chat.ID, []service.Message{}, u.Message.From.UserName)
@@ -128,15 +130,38 @@ func (hm *HandlerManager) HandleEcho(u *tgbotapi.Update) error {
 
 		replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, replyText)
 		replyMsg.ReplyToMessageID = u.Message.MessageID
-		if _, err = hm.bot.Send(replyMsg); err != nil {
+		gptM, err := hm.bot.Send(replyMsg)
+		if err != nil {
 			return fmt.Errorf("cannot send msg via telegram api: %w", err)
 		}
+	
+		newBotM := service.NewMessage(
+			gptM.MessageID,
+			gptM.Text,
+			gptM.Chat.ID,
+			[]service.Message{},
+			hm.botName,
+		)
+	
+		m.Replies = append(m.Replies, *newBotM)
+	
+		newBotTgM := service.NewMessage(
+			gptM.MessageID,
+			gptM.Text,
+			gptM.Chat.ID,
+			m.Replies,
+			hm.botName,
+		)
+	
+		hm.mRepo.AddMessage(ctx, *newBotTgM)
+	
+		return nil
 	}
 
 	return nil
 }
 
-func (hm *HandlerManager) HandleAskFlaber(u *tgbotapi.Update) error {
+func (hm *HandlerManager) HandleAskFlaber(ctx context.Context,u *tgbotapi.Update) error {
 	sm := service.NewMessage(u.Message.MessageID, strings.TrimPrefix(u.Message.Text, "/af"), u.Message.Chat.ID, []service.Message{}, u.Message.From.UserName)
 	m := service.NewMessage(u.Message.MessageID, strings.TrimPrefix(u.Message.Text, "/af"), u.Message.Chat.ID, []service.Message{}, u.Message.From.UserName)
 	m.Replies = append(m.Replies, *sm)
@@ -150,11 +175,30 @@ func (hm *HandlerManager) HandleAskFlaber(u *tgbotapi.Update) error {
 
 	replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, replyText)
 	replyMsg.ReplyToMessageID = u.Message.MessageID
-	_, err = hm.bot.Send(replyMsg)
-
+	gptM, err := hm.bot.Send(replyMsg)
 	if err != nil {
 		return fmt.Errorf("cannot send msg via telegram api: %w", err)
 	}
+
+	newBotM := service.NewMessage(
+		gptM.MessageID,
+		gptM.Text,
+		gptM.Chat.ID,
+		[]service.Message{},
+		hm.botName,
+	)
+
+	m.Replies = append(m.Replies, *newBotM)
+
+	newBotTgM := service.NewMessage(
+		gptM.MessageID,
+		gptM.Text,
+		gptM.Chat.ID,
+		m.Replies,
+		hm.botName,
+	)
+
+	hm.mRepo.AddMessage(ctx, *newBotTgM)
 
 	return nil
 }
@@ -260,7 +304,7 @@ func (hm *HandlerManager) HandleListRemind(ctx context.Context, u *tgbotapi.Upda
 	var buttons [][]tgbotapi.InlineKeyboardButton
 	for _, remind := range rl {
 		button := tgbotapi.NewInlineKeyboardButtonData(
-			fmt.Sprintf("🕒 %s - %s", remind.Cron, remind.Message),
+			fmt.Sprintf("❌ %s - %s", remind.Cron, remind.Message),
 			fmt.Sprintf("delete_%s", remind.Id.Hex()),
 		)
 		buttons = append(buttons, tgbotapi.NewInlineKeyboardRow(button))
