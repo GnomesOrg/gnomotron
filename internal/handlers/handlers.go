@@ -301,6 +301,38 @@ func (hm *HandlerManager) HandleListRemind(ctx context.Context, u *tgbotapi.Upda
 		return nil
 	}
 
+	var remindersText string
+	for _, remind := range rl {
+		remindersText += fmt.Sprintf("\n<b>🕒 %s</b> - %s", remind.Cron, remind.Message)
+	}
+
+	replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, "Ваши напоминания:\n"+remindersText)
+	replyMsg.ParseMode = "HTML"
+	replyMsg.ReplyToMessageID = u.Message.MessageID
+
+	if _, err = hm.bot.Send(replyMsg); err != nil {
+		return fmt.Errorf("cannot send msg via telegram api: %w", err)
+	}
+
+	return nil
+}
+
+
+func (hm *HandlerManager) HandleDeleteListRemind(ctx context.Context, u *tgbotapi.Update) error {
+	rl, err := hm.rRepo.ListRemindByChat(ctx, u.Message.Chat.ID)
+	if err != nil {
+		return fmt.Errorf("cannot get remind list: %w", err)
+	}
+
+	if len(rl) == 0 {
+		replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, "У вас нет напоминаний")
+		replyMsg.ReplyToMessageID = u.Message.MessageID
+		if _, err = hm.bot.Send(replyMsg); err != nil {
+			return fmt.Errorf("cannot send msg via telegram api: %w", err)
+		}
+		return nil
+	}
+
 	var buttons [][]tgbotapi.InlineKeyboardButton
 	for _, remind := range rl {
 		button := tgbotapi.NewInlineKeyboardButtonData(
@@ -351,7 +383,7 @@ func (hm *HandlerManager) HandleDeleteRemind(ctx context.Context, u *tgbotapi.Up
 	var buttons [][]tgbotapi.InlineKeyboardButton
 	for _, remind := range rl {
 		button := tgbotapi.NewInlineKeyboardButtonData(
-			fmt.Sprintf("🕒 %s - %s", remind.Cron, remind.Message),
+			fmt.Sprintf("❌ %s - %s", remind.Cron, remind.Message),
 			fmt.Sprintf("delete_%s", remind.Id.Hex()),
 		)
 		buttons = append(buttons, tgbotapi.NewInlineKeyboardRow(button))

@@ -95,7 +95,7 @@ func main() {
 					case "lr":
 						err = handlerManager.HandleListRemind(botCtx, &update)
 					case "dr":
-						err = handlerManager.HandleDeleteRemind(botCtx, &update)
+						err = handlerManager.HandleDeleteListRemind(botCtx, &update)
 					default:
 						if update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.From.UserName == cfg.BOT_NAME {
 							// handle only replies of gnomotron messages
