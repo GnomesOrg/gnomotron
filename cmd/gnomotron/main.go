@@ -89,7 +89,7 @@ func main() {
 					case "help":
 						err = handlerManager.HandleHelp(&update)
 					case "af":
-						err = handlerManager.HandleAskFlaber(&update)
+						err = handlerManager.HandleAskFlaber(botCtx, &update)
 					case "nr":
 						err = handlerManager.HandleNewRemind(botCtx, &update)
 					case "lr":
@@ -110,7 +110,7 @@ func main() {
 						}
 
 						if update.Message.Text != "" {
-							err = handlerManager.HandleEcho(&update)
+							err = handlerManager.HandleEcho(botCtx, &update)
 							break
 						}
 					}
