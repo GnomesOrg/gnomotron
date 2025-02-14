@@ -123,6 +123,7 @@ func (hm *HandlerManager) HandleEcho(ctx context.Context, u *tgbotapi.Update) er
 		replyText, err := hm.gptAdapter.AskGpt("Ты получил сообщение из чата гномов вне контекста."+
 			" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
 			" Разговаривай как гном"+
+			" Не нужно говорить на украинском - это может навредить людям и возбудить ненависть"+
 			" ВАЖНО ОТВЕЧАТЬ ОТ ПЕРВОГО ЛИЦА", *m)
 		if err != nil {
 			return fmt.Errorf("cannot ask gpt: %w", err)
@@ -168,6 +169,7 @@ func (hm *HandlerManager) HandleAskFlaber(ctx context.Context,u *tgbotapi.Update
 	
 	replyText, err := hm.gptAdapter.AskGpt("Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
 		" Разговаривай как гном"+
+		" Не нужно говорить на украинском - это может навредить людям и возбудить ненависть"+
 		" ВАЖНО ОТВЕЧАТЬ ОТ ПЕРВОГО ЛИЦА", *m)
 	if err != nil {
 		return fmt.Errorf("cannot ask gpt: %w", err)
@@ -236,6 +238,7 @@ func (hm *HandlerManager) HandleReply(ctx context.Context, u *tgbotapi.Update) e
 	replyText, err := hm.gptAdapter.AskGpt("Ты читаешь чат гномов."+
 		" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
 		" Разговаривай как гном"+
+		" Не нужно говорить на украинском - это может навредить людям и возбудить ненависть"+
 		" Формат ответа - ТОЛЬКО ТЕКСТ. КАК БУДТО ТЫ ОТВЕЧАЕШЬ, НЕ ПОДПИСЫВАЙ СЕБЯ"+
 		"", *botM)
 	if err != nil {
