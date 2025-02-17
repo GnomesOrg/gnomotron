@@ -33,7 +33,7 @@ func main() {
 		l.Error("error on bot init", slog.Any("error", err))
 	}
 
-	bot.Debug = true
+	bot.Debug = cfg.BOT_DEGUB
 
 	//Command server
 	ch := commands.NewCommandHandler(l, bot)
@@ -79,38 +79,44 @@ func main() {
 		go func() {
 			defer wg.Done()
 
-			for update := range updates {
-				if update.Message != nil {
-					l.Info(fmt.Sprintf("[%s] %s", update.Message.From.UserName, update.Message.Text))
+			for upd := range updates {
+				if upd.Message != nil {
+					l.Info(
+						"new message", 
+						slog.Int64("chat id", upd.Message.Chat.ID), 
+						slog.Int("message id", upd.Message.MessageID), 
+						slog.String("username", upd.Message.From.UserName),
+						slog.String("body", upd.Message.Text),
+					)
 					var err error
-					switch update.Message.Command() {
+					switch upd.Message.Command() {
 					case "start":
-						handlerManager.HandleStart(&update)
+						handlerManager.HandleStart(&upd)
 					case "help":
-						err = handlerManager.HandleHelp(&update)
+						err = handlerManager.HandleHelp(&upd)
 					case "af":
-						err = handlerManager.HandleAskFlaber(botCtx, &update)
+						err = handlerManager.HandleAskFlaber(botCtx, &upd)
 					case "nr":
-						err = handlerManager.HandleNewRemind(botCtx, &update)
+						err = handlerManager.HandleNewRemind(botCtx, &upd)
 					case "lr":
-						err = handlerManager.HandleListRemind(botCtx, &update)
+						err = handlerManager.HandleListRemind(botCtx, &upd)
 					case "dr":
-						err = handlerManager.HandleDeleteListRemind(botCtx, &update)
+						err = handlerManager.HandleDeleteListRemind(botCtx, &upd)
 					default:
-						if update.Message.ReplyToMessage != nil && update.Message.ReplyToMessage.From.UserName == cfg.BOT_NAME {
+						if upd.Message.ReplyToMessage != nil && upd.Message.ReplyToMessage.From.UserName == cfg.BOT_NAME {
 							// handle only replies of gnomotron messages
 
-							err = handlerManager.HandleReply(botCtx, &update)
+							err = handlerManager.HandleReply(botCtx, &upd)
 							break
 						}
 
-						if update.Message.Photo != nil {
-							err = handlerManager.HandleImage(&update)
+						if upd.Message.Photo != nil {
+							err = handlerManager.HandleImage(&upd)
 							break
 						}
 
-						if update.Message.Text != "" {
-							err = handlerManager.HandleEcho(botCtx, &update)
+						if upd.Message.Text != "" {
+							err = handlerManager.HandleEcho(botCtx, &upd)
 							break
 						}
 					}
@@ -120,15 +126,15 @@ func main() {
 					}
 				}
 
-				if update.CallbackQuery != nil {
-					l.Debug(fmt.Sprintf("callbackQuery from [%s]: %s", update.CallbackQuery.From.UserName, update.CallbackQuery.Data))
+				if upd.CallbackQuery != nil {
+					l.Debug(fmt.Sprintf("callbackQuery from [%s]: %s", upd.CallbackQuery.From.UserName, upd.CallbackQuery.Data))
 	
-					err := handlerManager.HandleDeleteRemind(botCtx, &update)
+					err := handlerManager.HandleDeleteRemind(botCtx, &upd)
 					if err != nil {
 						l.Error(fmt.Sprintf("error while handling callback query: %+v", err))
 					}
 	
-					callback := tgbotapi.NewCallback(update.CallbackQuery.ID, "Обработано")
+					callback := tgbotapi.NewCallback(upd.CallbackQuery.ID, "Обработано")
 					if _, err := bot.Request(callback); err != nil {
 						l.Error(fmt.Sprintf("error sending callback response: %+v", err))
 					}

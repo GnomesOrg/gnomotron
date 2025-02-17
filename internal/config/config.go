@@ -13,6 +13,7 @@ type Config struct {
 	MONGO_DB          string
 	BOT_NAME          string
 	MAX_DIALOGUE_SIZE int
+	BOT_DEGUB         bool
 }
 
 func LoadConfig() *Config {
