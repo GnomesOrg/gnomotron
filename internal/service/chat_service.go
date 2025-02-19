@@ -5,7 +5,6 @@ import (
 	"flabergnomebot/internal/config"
 	"fmt"
 	"log/slog"
-	"sync"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -53,7 +52,6 @@ type Repositroy struct {
 	c     *mongo.Collection
 	l     *slog.Logger
 	cfg   *config.Config
-	cache sync.Map
 }
 
 func NewRepository(c *mongo.Collection, l *slog.Logger, cfg *config.Config) *Repositroy {
@@ -101,19 +99,9 @@ func (r *Repositroy) AddMessage(ctx context.Context, m Message) error {
 }
 
 func (r *Repositroy) AddChat(ctx context.Context, c Chat) error {
-	if _, exists := r.cache.Load(c.ChatID); exists {
-		return nil
-	}
-
 	filter := bson.M{"chatId": c.ChatID}
 	var existingChat Chat
 	err := r.c.FindOne(ctx, filter).Decode(&existingChat)
-
-	if err == nil {
-		r.l.Debug("chat already exists in database, adding to cache", slog.Int64("chatId", c.ChatID))
-		r.cache.Store(c.ChatID, true)
-		return nil
-	}
 
 	if err != mongo.ErrNoDocuments {
 		return fmt.Errorf("failed to check for existing chat: %w", err)
@@ -124,7 +112,6 @@ func (r *Repositroy) AddChat(ctx context.Context, c Chat) error {
 		return fmt.Errorf("failed to insert chat: %w", err)
 	}
 
-	r.cache.Store(c.ChatID, true)
 	r.l.Debug("new chat registered", slog.String("chat name: ", c.Name), slog.Int64("chatId", c.ChatID))
 
 	return nil
