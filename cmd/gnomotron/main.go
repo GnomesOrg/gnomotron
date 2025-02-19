@@ -52,9 +52,11 @@ func main() {
 
 	rCol := client.Database(cfg.MONGO_DB).Collection(service.RemindCollection)
 	mCol := client.Database(cfg.MONGO_DB).Collection(service.MessageCollection)
+	cCol := client.Database(cfg.MONGO_DB).Collection(service.ChatCollection)
 	remindRepo := service.NewRemindRepository(rCol, l)
-	mRepo := service.NewMessageRepository(mCol, l, cfg)
-	handlerManager := handlers.New(bot, adapter, remindRepo, mRepo, l, cfg.BOT_NAME)
+	mRepo := service.NewRepository(mCol, l, cfg)
+	cRepo := service.NewRepository(cCol, l, cfg)
+	handlerManager := handlers.New(bot, adapter, remindRepo, mRepo, cRepo, l, cfg.BOT_NAME)
 
 	botCtx := context.Background()
 
@@ -82,25 +84,25 @@ func main() {
 			for upd := range updates {
 				if upd.Message != nil {
 					l.Info(
-						"new message", 
-						slog.Int64("chat id", upd.Message.Chat.ID), 
-						slog.Int("message id", upd.Message.MessageID), 
+						"new message",
+						slog.Int64("chat id", upd.Message.Chat.ID),
+						slog.Int("message id", upd.Message.MessageID),
 						slog.String("username", upd.Message.From.UserName),
 						slog.String("body", upd.Message.Text),
 					)
 					var err error
-					switch upd.Message.Command() {
-					case "start":
-						handlerManager.HandleStart(&upd)
-					case "help":
+					switch upd.Message.CommandWithAt() {
+					case "start@" + cfg.BOT_NAME:
+						handlerManager.HandleStart(botCtx, &upd)
+					case "help@" + cfg.BOT_NAME:
 						err = handlerManager.HandleHelp(&upd)
-					case "af":
+					case "af@" + cfg.BOT_NAME:
 						err = handlerManager.HandleAskFlaber(botCtx, &upd)
-					case "nr":
+					case "nr@" + cfg.BOT_NAME:
 						err = handlerManager.HandleNewRemind(botCtx, &upd)
-					case "lr":
+					case "lr@" + cfg.BOT_NAME:
 						err = handlerManager.HandleListRemind(botCtx, &upd)
-					case "dr":
+					case "dr@" + cfg.BOT_NAME:
 						err = handlerManager.HandleDeleteListRemind(botCtx, &upd)
 					default:
 						if upd.Message.ReplyToMessage != nil && upd.Message.ReplyToMessage.From.UserName == cfg.BOT_NAME {
@@ -128,12 +130,12 @@ func main() {
 
 				if upd.CallbackQuery != nil {
 					l.Debug(fmt.Sprintf("callbackQuery from [%s]: %s", upd.CallbackQuery.From.UserName, upd.CallbackQuery.Data))
-	
+
 					err := handlerManager.HandleDeleteRemind(botCtx, &upd)
 					if err != nil {
 						l.Error(fmt.Sprintf("error while handling callback query: %+v", err))
 					}
-	
+
 					callback := tgbotapi.NewCallback(upd.CallbackQuery.ID, "Обработано")
 					if _, err := bot.Request(callback); err != nil {
 						l.Error(fmt.Sprintf("error sending callback response: %+v", err))

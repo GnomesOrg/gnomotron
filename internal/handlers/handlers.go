@@ -21,17 +21,19 @@ type HandlerManager struct {
 	bot        *tgbotapi.BotAPI
 	gptAdapter *gptadapter.GptAdapter
 	rRepo      *service.RemindRepository
-	mRepo      *service.MessageRepository
+	mRepo      *service.Repositroy
+	cRepo      *service.Repositroy
 	l          *slog.Logger
 	botName    string
 }
 
-func New(bot *tgbotapi.BotAPI, adapter *gptadapter.GptAdapter, rRepo *service.RemindRepository, mRepo *service.MessageRepository, l *slog.Logger, botName string) *HandlerManager {
+func New(bot *tgbotapi.BotAPI, adapter *gptadapter.GptAdapter, rRepo *service.RemindRepository, mRepo *service.Repositroy, cRepo *service.Repositroy, l *slog.Logger, botName string) *HandlerManager {
 	return &HandlerManager{
 		bot:        bot,
 		gptAdapter: adapter,
 		rRepo:      rRepo,
 		mRepo:      mRepo,
+		cRepo:      cRepo,
 		l:          l,
 		botName:    botName,
 	}
@@ -57,7 +59,7 @@ func (hm *HandlerManager) HandleHelp(update *tgbotapi.Update) error {
 }
 
 func (hm *HandlerManager) HandleNewRemind(ctx context.Context, u *tgbotapi.Update) error {
-	m := u.Message.Text
+	m := u.Message.CommandArguments()
 	r, err := ExtractRemindFromStr(m)
 	if err != nil || r == nil {
 		_, sendErr := hm.bot.Send(tgbotapi.NewMessage(u.Message.Chat.ID, "У меня не получилось :("))
@@ -85,12 +87,15 @@ func (hm *HandlerManager) HandleNewRemind(ctx context.Context, u *tgbotapi.Updat
 	return nil
 }
 
-func (hm *HandlerManager) HandleStart(update *tgbotapi.Update) error {
-	replyMsg := tgbotapi.NewMessage(update.Message.Chat.ID, "My name is Flaber, hello friend")
-	replyMsg.ReplyToMessageID = update.Message.MessageID
-	_, err := hm.bot.Send(replyMsg)
-	if err != nil {
+func (hm *HandlerManager) HandleStart(ctx context.Context, u *tgbotapi.Update) error {
+	replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, "My name is Flaber, hello friend")
+	replyMsg.ReplyToMessageID = u.Message.MessageID
+	if _, err := hm.bot.Send(replyMsg); err != nil {
 		return fmt.Errorf("cannot send msg via telegram api: %w", err)
+	}
+	c := service.NewChat(u.FromChat().ID, u.FromChat().Title)
+	if err := hm.cRepo.AddChat(ctx, *c); err != nil {
+		return fmt.Errorf("error on chat addition: %w", err)
 	}
 
 	return nil
@@ -135,7 +140,7 @@ func (hm *HandlerManager) HandleEcho(ctx context.Context, u *tgbotapi.Update) er
 		if err != nil {
 			return fmt.Errorf("cannot send msg via telegram api: %w", err)
 		}
-	
+
 		newBotM := service.NewMessage(
 			gptM.MessageID,
 			gptM.Text,
@@ -143,9 +148,9 @@ func (hm *HandlerManager) HandleEcho(ctx context.Context, u *tgbotapi.Update) er
 			[]service.Message{},
 			hm.botName,
 		)
-	
+
 		m.Replies = append(m.Replies, *newBotM)
-	
+
 		newBotTgM := service.NewMessage(
 			gptM.MessageID,
 			gptM.Text,
@@ -153,20 +158,20 @@ func (hm *HandlerManager) HandleEcho(ctx context.Context, u *tgbotapi.Update) er
 			m.Replies,
 			hm.botName,
 		)
-	
+
 		hm.mRepo.AddMessage(ctx, *newBotTgM)
-	
+
 		return nil
 	}
 
 	return nil
 }
 
-func (hm *HandlerManager) HandleAskFlaber(ctx context.Context,u *tgbotapi.Update) error {
-	sm := service.NewMessage(u.Message.MessageID, strings.TrimPrefix(u.Message.Text, "/af"), u.Message.Chat.ID, []service.Message{}, u.Message.From.UserName)
-	m := service.NewMessage(u.Message.MessageID, strings.TrimPrefix(u.Message.Text, "/af"), u.Message.Chat.ID, []service.Message{}, u.Message.From.UserName)
+func (hm *HandlerManager) HandleAskFlaber(ctx context.Context, u *tgbotapi.Update) error {
+	sm := service.NewMessage(u.Message.MessageID, u.Message.CommandArguments(), u.Message.Chat.ID, []service.Message{}, u.Message.From.UserName)
+	m := service.NewMessage(u.Message.MessageID, u.Message.CommandArguments(), u.Message.Chat.ID, []service.Message{}, u.Message.From.UserName)
 	m.Replies = append(m.Replies, *sm)
-	
+
 	replyText, err := hm.gptAdapter.AskGpt("Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
 		" Разговаривай как гном"+
 		" (((НЕ НУЖНО ГОВОРИТЬ НА УКРАИНСКОМ - ЭТО МОЖЕТ НАВРЕДИТЬ ЛЮДЯМ И ВОЗБУДИТЬ НЕНАВИСТЬ)))"+
@@ -276,11 +281,7 @@ func (hm *HandlerManager) HandleReply(ctx context.Context, u *tgbotapi.Update) e
 }
 
 func ExtractRemindFromStr(input string) (*service.Remind, error) {
-	if !strings.HasPrefix(input, "/nr") {
-		return nil, errors.New("input string must start with /nr")
-	}
-
-	re := regexp.MustCompile(`^/nr\s+\[([^\]]+)\]\s+(.+)$`)
+	re := regexp.MustCompile(`^\s*\[([^\]]+)\]\s+(.+)$`)
 	matches := re.FindStringSubmatch(input)
 	if len(matches) != 3 {
 		return nil, errors.New("input string is not in the correct format")
@@ -319,7 +320,6 @@ func (hm *HandlerManager) HandleListRemind(ctx context.Context, u *tgbotapi.Upda
 
 	return nil
 }
-
 
 func (hm *HandlerManager) HandleDeleteListRemind(ctx context.Context, u *tgbotapi.Update) error {
 	rl, err := hm.rRepo.ListRemindByChat(ctx, u.Message.Chat.ID)

@@ -5,6 +5,7 @@ import (
 	"flabergnomebot/internal/config"
 	"fmt"
 	"log/slog"
+	"sync"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -12,6 +13,7 @@ import (
 )
 
 const MessageCollection = "message"
+const ChatCollection = "chat"
 
 type Message struct {
 	Id      primitive.ObjectID `bson:"_id,omitempty"`
@@ -20,6 +22,12 @@ type Message struct {
 	ChatID  int64              `bson:"chat_id"`
 	Replies []Message          `bson:"replies"`
 	Uname   string             `bson:"username"`
+}
+
+type Chat struct {
+	Id     primitive.ObjectID `bson:"_id,omitempty"`
+	ChatID int64              `bson:"chatId"`
+	Name   string             `bson:"name"`
 }
 
 func NewMessage(tId int, body string, chatId int64, replies []Message, uname string) *Message {
@@ -33,24 +41,33 @@ func NewMessage(tId int, body string, chatId int64, replies []Message, uname str
 	}
 }
 
-type MessageRepository struct {
-	c   *mongo.Collection
-	l   *slog.Logger
-	cfg *config.Config
+func NewChat(chatId int64, name string) *Chat {
+	return &Chat{
+		Id:     primitive.NewObjectID(),
+		ChatID: chatId,
+		Name:   name,
+	}
 }
 
-func NewMessageRepository(c *mongo.Collection, l *slog.Logger, cfg *config.Config) *MessageRepository {
-	return &MessageRepository{
+type Repositroy struct {
+	c     *mongo.Collection
+	l     *slog.Logger
+	cfg   *config.Config
+	cache sync.Map
+}
+
+func NewRepository(c *mongo.Collection, l *slog.Logger, cfg *config.Config) *Repositroy {
+	return &Repositroy{
 		c:   c,
 		l:   l,
 		cfg: cfg,
 	}
 }
 
-func (mr *MessageRepository) FindMessageByTelegramId(ctx context.Context, tId int) (*Message, error) {
+func (r *Repositroy) FindMessageByTelegramId(ctx context.Context, tId int) (*Message, error) {
 	f := bson.D{{Key: "telegram_id", Value: tId}}
 
-	cur, err := mr.c.Find(ctx, f)
+	cur, err := r.c.Find(ctx, f)
 	if err != nil {
 		return nil, fmt.Errorf("FindMessageByTelegramIderror %w", err)
 	}
@@ -66,19 +83,49 @@ func (mr *MessageRepository) FindMessageByTelegramId(ctx context.Context, tId in
 	return &m, nil
 }
 
-func (mr *MessageRepository) AddMessage(ctx context.Context, m Message) (*mongo.InsertOneResult, error) {
-	maxDs := mr.cfg.MAX_DIALOGUE_SIZE
+func (r *Repositroy) AddMessage(ctx context.Context, m Message) error {
+	maxDs := r.cfg.MAX_DIALOGUE_SIZE
 
 	if len(m.Replies) > int(maxDs) {
 		m.Replies = m.Replies[len(m.Replies)-int(maxDs):]
 	}
 
-	mUUID, err := mr.c.InsertOne(ctx, m)
-	mr.l.Debug("new dialogue message", slog.String("message body: ", m.Body))
+	_, err := r.c.InsertOne(ctx, m)
+	r.l.Debug("new dialogue message", slog.String("message body: ", m.Body))
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return mUUID, nil
+	return nil
+}
+
+func (r *Repositroy) AddChat(ctx context.Context, c Chat) error {
+	if _, exists := r.cache.Load(c.ChatID); exists {
+		return nil
+	}
+
+	filter := bson.M{"chatId": c.ChatID}
+	var existingChat Chat
+	err := r.c.FindOne(ctx, filter).Decode(&existingChat)
+
+	if err == nil {
+		r.l.Debug("chat already exists in database, adding to cache", slog.Int64("chatId", c.ChatID))
+		r.cache.Store(c.ChatID, true)
+		return nil
+	}
+
+	if err != mongo.ErrNoDocuments {
+		return fmt.Errorf("failed to check for existing chat: %w", err)
+	}
+
+	_, err = r.c.InsertOne(ctx, c)
+	if err != nil {
+		return fmt.Errorf("failed to insert chat: %w", err)
+	}
+
+	r.cache.Store(c.ChatID, true)
+	r.l.Debug("new chat registered", slog.String("chat name: ", c.Name), slog.Int64("chatId", c.ChatID))
+
+	return nil
 }
