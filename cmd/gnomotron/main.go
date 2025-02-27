@@ -104,6 +104,10 @@ func main() {
 						err = handlerManager.HandleListRemind(botCtx, &upd)
 					case "dr@" + cfg.BOT_NAME:
 						err = handlerManager.HandleDeleteListRemind(botCtx, &upd)
+					case "chp@" + cfg.BOT_NAME:
+						err = handlerManager.HandleChangeConfig(botCtx, &upd)
+					case "lp@" + cfg.BOT_NAME:
+						err = handlerManager.HandleListConfig(botCtx, &upd)
 					default:
 						if upd.Message.ReplyToMessage != nil && upd.Message.ReplyToMessage.From.UserName == cfg.BOT_NAME {
 							// handle only replies of gnomotron messages
@@ -113,7 +117,7 @@ func main() {
 						}
 
 						if upd.Message.Photo != nil {
-							err = handlerManager.HandleImage(&upd)
+							err = handlerManager.HandleImage(botCtx, &upd)
 							break
 						}
 

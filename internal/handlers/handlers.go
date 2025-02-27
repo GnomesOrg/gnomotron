@@ -9,13 +9,12 @@ import (
 	"log/slog"
 	"math/rand"
 	"regexp"
+	"strconv"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
-
-const replyProbability = 0.02
 
 type HandlerManager struct {
 	bot        *tgbotapi.BotAPI
@@ -101,8 +100,8 @@ func (hm *HandlerManager) HandleStart(ctx context.Context, u *tgbotapi.Update) e
 	return nil
 }
 
-func (hm *HandlerManager) HandleImage(update *tgbotapi.Update) error {
-	if isShouldReply(replyProbability) {
+func (hm *HandlerManager) HandleImage(ctx context.Context, u *tgbotapi.Update) error {
+	if hm.shouldReply(ctx, u.FromChat().ID) {
 		responses := []string{
 			"Удали.",
 			"ПХАХПАХпхпхаПА",
@@ -110,8 +109,8 @@ func (hm *HandlerManager) HandleImage(update *tgbotapi.Update) error {
 			"Я обожаю сиськи",
 		}
 		randomIndex := rand.Intn(len(responses))
-		resp := tgbotapi.NewMessage(update.Message.Chat.ID, responses[randomIndex])
-		resp.ReplyToMessageID = update.Message.MessageID
+		resp := tgbotapi.NewMessage(u.Message.Chat.ID, responses[randomIndex])
+		resp.ReplyToMessageID = u.Message.MessageID
 		if _, err := hm.bot.Send(resp); err != nil {
 			return fmt.Errorf("cannot send msg via telegram api: %w", err)
 		}
@@ -120,7 +119,7 @@ func (hm *HandlerManager) HandleImage(update *tgbotapi.Update) error {
 }
 
 func (hm *HandlerManager) HandleEcho(ctx context.Context, u *tgbotapi.Update) error {
-	if isShouldReply(replyProbability) && len(u.Message.Text) > 40 {
+	if hm.shouldReply(ctx, u.FromChat().ID) && len(u.Message.Text) > 40 {
 		sm := service.NewMessage(u.Message.MessageID, u.Message.Text, u.Message.Chat.ID, []service.Message{}, u.Message.From.UserName)
 		m := service.NewMessage(u.Message.MessageID, u.Message.Text, u.Message.Chat.ID, []service.Message{}, u.Message.From.UserName)
 		m.Replies = append(m.Replies, *sm)
@@ -412,6 +411,59 @@ func (hm *HandlerManager) HandleDeleteRemind(ctx context.Context, u *tgbotapi.Up
 	return nil
 }
 
-func isShouldReply(probability float32) bool {
-	return rand.Float32() < probability
+func (hm *HandlerManager) HandleListConfig(ctx context.Context, u *tgbotapi.Update) error {
+	ch, err := hm.cRepo.FindChatByChatId(ctx, u.FromChat().ID)
+	if err != nil {
+		hm.l.Error("cannot find chat by chat id", slog.Int64("chatId", u.FromChat().ID), slog.Any("err", err))
+
+		return nil
+	}
+
+	hm.bot.Send(tgbotapi.NewMessage(u.Message.Chat.ID, fmt.Sprintf("Шанс ответа сейчас: %.2f %% \n"+
+		"чтобы изменить этот шанс напиши: /chp {шанс от 0 до 1}", ch.ReplyProbability*100)))
+
+	return nil
+}
+
+func (hm *HandlerManager) HandleChangeConfig(ctx context.Context, u *tgbotapi.Update) error {
+	ch, err := hm.cRepo.FindChatByChatId(ctx, u.FromChat().ID)
+	if err != nil {
+		hm.l.Error("cannot find chat by chat id", slog.Int64("chatId", u.FromChat().ID), slog.Any("err", err))
+
+		return nil
+	}
+
+	arg := u.Message.CommandArguments()
+
+	fv, err := strconv.ParseFloat(arg, 32)
+	ch.ReplyProbability = float32(fv)
+
+	if err != nil {
+		hm.l.Error("failed to parse float", slog.String("arg", arg), slog.Any("err", err))
+		return nil
+	}
+
+	err = hm.cRepo.UpdateChat(ctx, ch)
+	if err != nil {
+		hm.l.Error("failed to update chat", slog.Int64("chatId", u.FromChat().ID), slog.Any("err", err))
+	}
+
+	_, err = hm.bot.Send(tgbotapi.NewMessage(u.Message.Chat.ID, fmt.Sprintf("Шанс ответа теперь: %.2f %% \n", ch.ReplyProbability*100))); if err != nil {
+		return fmt.Errorf("cannot send msg via telegram api: %w", err)
+	}
+
+	return nil
+}
+
+func (hm *HandlerManager) shouldReply(ctx context.Context, cID int64) bool {
+	ch, err := hm.cRepo.FindChatByChatId(ctx, cID)
+	if err != nil {
+		hm.l.Error("cannot find chat by chat id", slog.Int64("chatId", cID), slog.Any("err", err))
+
+		return false
+	}
+
+	hm.l.Debug("debug reply probability", slog.Any("replyProbability", ch.ReplyProbability))
+
+	return ch.ReplyProbability > rand.Float32()
 }

@@ -27,6 +27,7 @@ type Chat struct {
 	Id     primitive.ObjectID `bson:"_id,omitempty"`
 	ChatID int64              `bson:"chatId"`
 	Name   string             `bson:"name"`
+	ReplyProbability float32  `bson:"reply_probability"`
 }
 
 func NewMessage(tId int, body string, chatId int64, replies []Message, uname string) *Message {
@@ -45,6 +46,7 @@ func NewChat(chatId int64, name string) *Chat {
 		Id:     primitive.NewObjectID(),
 		ChatID: chatId,
 		Name:   name,
+		ReplyProbability: 0,
 	}
 }
 
@@ -115,4 +117,31 @@ func (r *Repositroy) AddChat(ctx context.Context, c Chat) error {
 	r.l.Debug("new chat registered", slog.String("chat name: ", c.Name), slog.Int64("chatId", c.ChatID))
 
 	return nil
+}
+
+func (r *Repositroy) FindChatByChatId(ctx context.Context, chatId int64) (*Chat, error) {
+	f := bson.D{{Key: "chatId", Value: chatId}}
+
+	cur, err := r.c.Find(ctx, f)
+	if err != nil {
+		return nil, fmt.Errorf("FindChatByChatId error %w", err)
+	}
+	defer cur.Close(ctx)
+
+	var c Chat
+	for cur.Next(ctx) {
+		if curErr := cur.Decode(&c); curErr != nil {
+			return nil, fmt.Errorf("CursorError %w", err)
+		}
+	}
+
+	return &c, nil
+}
+
+func (r *Repositroy) UpdateChat(ctx context.Context, chat *Chat) error {
+    filter := bson.M{"chatId": chat.ChatID}
+    update := bson.M{"$set": bson.M{"reply_probability": chat.ReplyProbability}}
+
+    _, err := r.c.UpdateOne(ctx, filter, update)
+    return err
 }
