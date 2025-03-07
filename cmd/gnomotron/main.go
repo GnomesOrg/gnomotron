@@ -26,7 +26,7 @@ func main() {
 	}
 	l := slog.New(slog.NewJSONHandler(os.Stdout, loggerOptions))
 	cfg := config.LoadConfig()
-	gcfg := gptadapter.GptConfig{ApiToken: cfg.APIKEY, BotName: cfg.BOT_NAME}
+	gcfg := gptadapter.GptConfig{ApiToken: cfg.APIKEY, BotName: cfg.BOT_NAME, BaseURL: cfg.GPT_ENDPOINT}
 	adapter := gptadapter.New(l, &gcfg)
 	bot, err := tgbotapi.NewBotAPI(cfg.TOKEN)
 	if err != nil {
