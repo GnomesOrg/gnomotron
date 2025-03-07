@@ -1,2 +1,3 @@
 MAX_DIALOGUE_SIZE: 20
 BOT_DEBUG: false
+GPT_ENDPOINT: "https://api.openai.com/v1/chat/completions"

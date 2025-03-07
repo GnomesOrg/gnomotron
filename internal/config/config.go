@@ -14,6 +14,7 @@ type Config struct {
 	BOT_NAME          string
 	MAX_DIALOGUE_SIZE int
 	BOT_DEGUB         bool
+	GPT_ENDPOINT      string
 }
 
 func LoadConfig() *Config {
