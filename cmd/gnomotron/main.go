@@ -35,12 +35,6 @@ func main() {
 
 	bot.Debug = cfg.BOT_DEGUB
 
-	//Command server
-	ch := commands.NewCommandHandler(l, bot)
-
-	http.HandleFunc("/sendMsg", ch.SendMsgCommand)
-	go http.ListenAndServe(":8055", nil)
-
 	//DB init
 	clientOptions := options.Client().ApplyURI(cfg.MONGO_URI)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -69,6 +63,12 @@ func main() {
 	u.Timeout = 60
 
 	updates := bot.GetUpdatesChan(u)
+
+	//Command server
+	ch := commands.NewCommandHandler(l, bot, cRepo)
+	http.HandleFunc("/sendMsg", ch.SendMsgCommand)
+	http.HandleFunc("/sendBcMsg", ch.SendBroadcastMsgCommand)
+	go http.ListenAndServe(":8055", nil)
 
 	// sometimes gnomotron is blocked by previous message, we may handle messages in parralel
 	// TODO: graceful shutdown

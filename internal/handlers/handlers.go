@@ -20,13 +20,13 @@ type HandlerManager struct {
 	bot        *tgbotapi.BotAPI
 	gptAdapter *gptadapter.GptAdapter
 	rRepo      *service.RemindRepository
-	mRepo      *service.Repository
-	cRepo      *service.Repository
+	mRepo      *service.ChatRepository
+	cRepo      *service.ChatRepository
 	l          *slog.Logger
 	botName    string
 }
 
-func New(bot *tgbotapi.BotAPI, adapter *gptadapter.GptAdapter, rRepo *service.RemindRepository, mRepo *service.Repository, cRepo *service.Repository, l *slog.Logger, botName string) *HandlerManager {
+func New(bot *tgbotapi.BotAPI, adapter *gptadapter.GptAdapter, rRepo *service.RemindRepository, mRepo *service.ChatRepository, cRepo *service.ChatRepository, l *slog.Logger, botName string) *HandlerManager {
 	return &HandlerManager{
 		bot:        bot,
 		gptAdapter: adapter,
