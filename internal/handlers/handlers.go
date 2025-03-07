@@ -47,7 +47,11 @@ func (hm *HandlerManager) HandleHelp(update *tgbotapi.Update) error {
 			"\n\rTo create reminder type"+
 			"\n\r/nr [{time in crontab format}] {body}"+
 			"\n\rTo delete reminder type"+
-			"\n\r/dr {remindId}",
+			"\n\r/dr {remindId}"+
+			"\n\rTo check reply probability type"+
+			"\n\r/lp"+
+			"\n\rTo change reply probability type"+
+			"\n\r/chp",
 	)
 	replyMsg.ReplyToMessageID = update.Message.MessageID
 	if _, err := hm.bot.Send(replyMsg); err != nil {
