@@ -20,13 +20,13 @@ type HandlerManager struct {
 	bot        *tgbotapi.BotAPI
 	gptAdapter *gptadapter.GptAdapter
 	rRepo      *service.RemindRepository
-	mRepo      *service.Repositroy
-	cRepo      *service.Repositroy
+	mRepo      *service.Repository
+	cRepo      *service.Repository
 	l          *slog.Logger
 	botName    string
 }
 
-func New(bot *tgbotapi.BotAPI, adapter *gptadapter.GptAdapter, rRepo *service.RemindRepository, mRepo *service.Repositroy, cRepo *service.Repositroy, l *slog.Logger, botName string) *HandlerManager {
+func New(bot *tgbotapi.BotAPI, adapter *gptadapter.GptAdapter, rRepo *service.RemindRepository, mRepo *service.Repository, cRepo *service.Repository, l *slog.Logger, botName string) *HandlerManager {
 	return &HandlerManager{
 		bot:        bot,
 		gptAdapter: adapter,
@@ -167,9 +167,21 @@ func (hm *HandlerManager) HandleEcho(ctx context.Context, u *tgbotapi.Update) er
 }
 
 func (hm *HandlerManager) HandleAskFlaber(ctx context.Context, u *tgbotapi.Update) error {
-	sm := service.NewMessage(u.Message.MessageID, u.Message.CommandArguments(), u.Message.Chat.ID, []service.Message{}, u.Message.From.UserName)
-	m := service.NewMessage(u.Message.MessageID, u.Message.CommandArguments(), u.Message.Chat.ID, []service.Message{}, u.Message.From.UserName)
-	m.Replies = append(m.Replies, *sm)
+	m := service.NewMessage(
+		u.Message.MessageID,
+		u.Message.CommandArguments(),
+		u.Message.Chat.ID,
+		[]service.Message{
+			*service.NewMessage(
+				u.Message.MessageID,
+				u.Message.CommandArguments(),
+				u.Message.Chat.ID,
+				[]service.Message{},
+				u.Message.From.UserName,
+			),
+		},
+		u.Message.From.UserName,
+	)
 
 	replyText, err := hm.gptAdapter.AskGpt("Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
 		" Разговаривай как гном"+
@@ -223,10 +235,8 @@ func (hm *HandlerManager) HandleReply(ctx context.Context, u *tgbotapi.Update) e
 		hm.botName,
 	)
 
-	var lastRepl []service.Message
 	if lastM != nil {
-		lastRepl = lastM.Replies
-		botM.Replies = append(botM.Replies, lastRepl...)
+		botM.Replies = append(botM.Replies, lastM.Replies...)
 	}
 
 	userM := service.NewMessage(
@@ -448,7 +458,8 @@ func (hm *HandlerManager) HandleChangeConfig(ctx context.Context, u *tgbotapi.Up
 		hm.l.Error("failed to update chat", slog.Int64("chatId", u.FromChat().ID), slog.Any("err", err))
 	}
 
-	_, err = hm.bot.Send(tgbotapi.NewMessage(u.Message.Chat.ID, fmt.Sprintf("Шанс ответа теперь: %.2f %% \n", ch.ReplyProbability*100))); if err != nil {
+	_, err = hm.bot.Send(tgbotapi.NewMessage(u.Message.Chat.ID, fmt.Sprintf("Шанс ответа теперь: %.2f %% \n", ch.ReplyProbability*100)))
+	if err != nil {
 		return fmt.Errorf("cannot send msg via telegram api: %w", err)
 	}
 

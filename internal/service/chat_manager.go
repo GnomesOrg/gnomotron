@@ -24,10 +24,10 @@ type Message struct {
 }
 
 type Chat struct {
-	Id     primitive.ObjectID `bson:"_id,omitempty"`
-	ChatID int64              `bson:"chatId"`
-	Name   string             `bson:"name"`
-	ReplyProbability float32  `bson:"reply_probability"`
+	Id               primitive.ObjectID `bson:"_id,omitempty"`
+	ChatID           int64              `bson:"chatId"`
+	Name             string             `bson:"name"`
+	ReplyProbability float32            `bson:"reply_probability"`
 }
 
 func NewMessage(tId int, body string, chatId int64, replies []Message, uname string) *Message {
@@ -43,28 +43,28 @@ func NewMessage(tId int, body string, chatId int64, replies []Message, uname str
 
 func NewChat(chatId int64, name string) *Chat {
 	return &Chat{
-		Id:     primitive.NewObjectID(),
-		ChatID: chatId,
-		Name:   name,
+		Id:               primitive.NewObjectID(),
+		ChatID:           chatId,
+		Name:             name,
 		ReplyProbability: 0,
 	}
 }
 
-type Repositroy struct {
-	c     *mongo.Collection
-	l     *slog.Logger
-	cfg   *config.Config
+type Repository struct {
+	c   *mongo.Collection
+	l   *slog.Logger
+	cfg *config.Config
 }
 
-func NewRepository(c *mongo.Collection, l *slog.Logger, cfg *config.Config) *Repositroy {
-	return &Repositroy{
+func NewRepository(c *mongo.Collection, l *slog.Logger, cfg *config.Config) *Repository {
+	return &Repository{
 		c:   c,
 		l:   l,
 		cfg: cfg,
 	}
 }
 
-func (r *Repositroy) FindMessageByTelegramId(ctx context.Context, tId int) (*Message, error) {
+func (r *Repository) FindMessageByTelegramId(ctx context.Context, tId int) (*Message, error) {
 	f := bson.D{{Key: "telegram_id", Value: tId}}
 
 	cur, err := r.c.Find(ctx, f)
@@ -83,7 +83,7 @@ func (r *Repositroy) FindMessageByTelegramId(ctx context.Context, tId int) (*Mes
 	return &m, nil
 }
 
-func (r *Repositroy) AddMessage(ctx context.Context, m Message) error {
+func (r *Repository) AddMessage(ctx context.Context, m Message) error {
 	maxDs := r.cfg.MAX_DIALOGUE_SIZE
 
 	if len(m.Replies) > int(maxDs) {
@@ -100,7 +100,7 @@ func (r *Repositroy) AddMessage(ctx context.Context, m Message) error {
 	return nil
 }
 
-func (r *Repositroy) AddChat(ctx context.Context, c Chat) error {
+func (r *Repository) AddChat(ctx context.Context, c Chat) error {
 	filter := bson.M{"chatId": c.ChatID}
 	var existingChat Chat
 	err := r.c.FindOne(ctx, filter).Decode(&existingChat)
@@ -119,7 +119,7 @@ func (r *Repositroy) AddChat(ctx context.Context, c Chat) error {
 	return nil
 }
 
-func (r *Repositroy) FindChatByChatId(ctx context.Context, chatId int64) (*Chat, error) {
+func (r *Repository) FindChatByChatId(ctx context.Context, chatId int64) (*Chat, error) {
 	f := bson.D{{Key: "chatId", Value: chatId}}
 
 	cur, err := r.c.Find(ctx, f)
@@ -138,10 +138,10 @@ func (r *Repositroy) FindChatByChatId(ctx context.Context, chatId int64) (*Chat,
 	return &c, nil
 }
 
-func (r *Repositroy) UpdateChat(ctx context.Context, chat *Chat) error {
-    filter := bson.M{"chatId": chat.ChatID}
-    update := bson.M{"$set": bson.M{"reply_probability": chat.ReplyProbability}}
+func (r *Repository) UpdateChat(ctx context.Context, chat *Chat) error {
+	filter := bson.M{"chatId": chat.ChatID}
+	update := bson.M{"$set": bson.M{"reply_probability": chat.ReplyProbability}}
 
-    _, err := r.c.UpdateOne(ctx, filter, update)
-    return err
+	_, err := r.c.UpdateOne(ctx, filter, update)
+	return err
 }
