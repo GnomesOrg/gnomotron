@@ -33,7 +33,7 @@ func main() {
 		l.Error("error on bot init", slog.Any("error", err))
 	}
 
-	bot.Debug = cfg.BOT_DEGUB
+	bot.Debug = cfg.BOT_DEBUG
 
 	//DB init
 	clientOptions := options.Client().ApplyURI(cfg.MONGO_URI)
@@ -44,13 +44,14 @@ func main() {
 		l.Error("error on connect to mongo", slog.Any("error", err))
 	}
 
+	httpCl := http.Client{Timeout: 30 * time.Second}
 	rCol := client.Database(cfg.MONGO_DB).Collection(service.RemindCollection)
 	mCol := client.Database(cfg.MONGO_DB).Collection(service.MessageCollection)
 	cCol := client.Database(cfg.MONGO_DB).Collection(service.ChatCollection)
 	remindRepo := service.NewRemindRepository(rCol, l)
 	mRepo := service.NewRepository(mCol, l, cfg)
 	cRepo := service.NewRepository(cCol, l, cfg)
-	handlerManager := handlers.New(bot, adapter, remindRepo, mRepo, cRepo, l, cfg.BOT_NAME)
+	handlerManager := handlers.New(bot, adapter, remindRepo, mRepo, cRepo, l, cfg.BOT_NAME, &httpCl)
 
 	botCtx := context.Background()
 
@@ -113,6 +114,11 @@ func main() {
 							// handle only replies of gnomotron messages
 
 							err = handlerManager.HandleReply(botCtx, &upd)
+							break
+						}
+
+						if upd.Message.Voice != nil {
+							err = handlerManager.HandleVoice(botCtx, &upd, fmt.Sprintf("%s:5000/stt", cfg.STT_HOST))
 							break
 						}
 
