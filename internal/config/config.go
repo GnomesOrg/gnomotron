@@ -29,7 +29,7 @@ func LoadConfig() *Config {
 	}
 
 	viper.BindEnv("TOKEN", "GNOMOTRON_TELEGRAM_TOKEN")
-	viper.BindEnv("APIKEY", "GNOMOTRON_TELEGRAM_API_KEY")
+	viper.BindEnv("APIKEY", "GPT_API_KEY")
 	viper.BindEnv("MONGO_URI", "GNOMOTRON_MONGO_URI")
 	viper.BindEnv("MONGO_DB", "GNOMOTRON_MONGO_DB")
 	viper.BindEnv("BOT_NAME", "BOT_NAME")

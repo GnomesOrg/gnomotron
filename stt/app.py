@@ -9,18 +9,18 @@ model = whisper.load_model(modelName)
 
 @app.route("/stt", methods=["POST"])
 def transcribe():
-    print("Received request")
+    print("Received request", flush=True)
     
     if "file" not in request.files:
         return {"error": "No file provided"}, 400
 
     audio_file = request.files["file"]
-    print(audio_file)
 
-    temp_path = "temp_audio.ogg"
+    temp_path = audio_file.filename
     audio_file.save(temp_path)
 
-    result = model.transcribe(temp_path)
+    result = model.transcribe(temp_path, language="ru")
+    print(result["text"], flush=True)
     
     return {"text": result["text"]}
 

@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"flabergnomebot/internal/gptadapter"
 	"flabergnomebot/internal/service"
@@ -29,6 +30,10 @@ type HandlerManager struct {
 	l          *slog.Logger
 	botName    string
 	httpClient *http.Client
+}
+
+type STTResponse struct {
+	Text string `json:"text"`
 }
 
 func New(
@@ -469,7 +474,7 @@ func (hm *HandlerManager) HandleVoice(ctx context.Context, u *tgbotapi.Update, s
 	//get file from telegram
 	file, err := hm.httpClient.Get(fileLink)
 	if err != nil {
-		hm.l.Error("cannot get voice file", slog.Any("err", err))
+		return fmt.Errorf("cannot get voice file: %w", err)
 	}
 	defer file.Body.Close()
 
@@ -479,42 +484,48 @@ func (hm *HandlerManager) HandleVoice(ctx context.Context, u *tgbotapi.Update, s
 
 	part, err := mpWriter.CreateFormFile("file", fmt.Sprintf("%s.ogg", v.FileID))
 	if err != nil {
-		hm.l.Error("cannot create form file", slog.Any("err", err))
 		return fmt.Errorf("cannot create form file: %w", err)
 
 	}
 
 	_, err = io.Copy(part, file.Body)
 	if err != nil {
-		hm.l.Error("cannot write file to form-data", slog.Any("err", err))
+		return fmt.Errorf("cannot write file to form-data: %w", err)
 	}
 	mpWriter.Close()
 
 	req, err := http.NewRequest("POST", sttUrl, body)
 	if err != nil {
-		hm.l.Error("cannot create request", slog.Any("err", err))
+		return fmt.Errorf("cannot create request: %w", err)
 	}
 	req.Header.Set("Content-Type", mpWriter.FormDataContentType())
 
 	resp, err := hm.httpClient.Do(req)
 	if err != nil {
-		hm.l.Error("cannot send request", slog.Any("err", err))
+		return fmt.Errorf("cannot send request: %w", err)
 	}
 	if resp == nil {
-		hm.l.Error("response is nil")
 		return fmt.Errorf("response is nil, %w", err)
 	}
 	defer resp.Body.Close()
 
     responseBody, err := io.ReadAll(resp.Body)
     if err != nil {
-        hm.l.Error("cannot read response body", slog.Any("err", err))
         return fmt.Errorf("cannot read response body: %w", err)
     }
 
-    hm.l.Info("Received STT response", slog.String("response", string(responseBody)))
+	var sttResp STTResponse
+	err = json.Unmarshal(responseBody, &sttResp)
+	if err != nil {
+		return fmt.Errorf("ошибка парсинга JSON: %w", err)
+	}
 
-	hm.bot.Send(tgbotapi.NewMessage(u.Message.Chat.ID, "Я не умею говорить, но я могу прочитать текст"))
+	newMessage := tgbotapi.NewMessage(u.Message.Chat.ID, sttResp.Text)
+	newMessage.ReplyToMessageID = u.Message.MessageID
+	_, err = hm.bot.Send(newMessage);
+	if err != nil {
+		return fmt.Errorf("cannot send msg via telegram api: %w", err)
+	}
 
 	return nil
 }
