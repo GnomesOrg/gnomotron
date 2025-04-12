@@ -1,13 +1,18 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"flabergnomebot/internal/gptadapter"
 	"flabergnomebot/internal/service"
 	"fmt"
+	"io"
 	"log/slog"
 	"math/rand"
+	"mime/multipart"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -24,9 +29,23 @@ type HandlerManager struct {
 	cRepo      *service.ChatRepository
 	l          *slog.Logger
 	botName    string
+	httpClient *http.Client
 }
 
-func New(bot *tgbotapi.BotAPI, adapter *gptadapter.GptAdapter, rRepo *service.RemindRepository, mRepo *service.ChatRepository, cRepo *service.ChatRepository, l *slog.Logger, botName string) *HandlerManager {
+type STTResponse struct {
+	Text string `json:"text"`
+}
+
+func New(
+	bot *tgbotapi.BotAPI,
+	adapter *gptadapter.GptAdapter,
+	rRepo *service.RemindRepository,
+	mRepo *service.ChatRepository,
+	cRepo *service.ChatRepository,
+	l *slog.Logger,
+	botName string,
+	httpClient *http.Client,
+) *HandlerManager {
 	return &HandlerManager{
 		bot:        bot,
 		gptAdapter: adapter,
@@ -35,6 +54,7 @@ func New(bot *tgbotapi.BotAPI, adapter *gptadapter.GptAdapter, rRepo *service.Re
 		cRepo:      cRepo,
 		l:          l,
 		botName:    botName,
+		httpClient: httpClient,
 	}
 }
 
@@ -434,7 +454,100 @@ func (hm *HandlerManager) HandleListConfig(ctx context.Context, u *tgbotapi.Upda
 	}
 
 	hm.bot.Send(tgbotapi.NewMessage(u.Message.Chat.ID, fmt.Sprintf("Шанс ответа сейчас: %.2f %% \n"+
-		"чтобы изменить этот шанс напиши: /chp {шанс от 0 до 1}", ch.ReplyProbability*100)))
+		"чтобы изменить этот шанс напиши: /chp@имябота {шанс от 0 до 1}", ch.ReplyProbability*100)))
+
+	return nil
+}
+
+func (hm *HandlerManager) HandleVoice(ctx context.Context, u *tgbotapi.Update, sttUrl string) error {
+	//need to think about different probablities
+	if rand.Float32() < 0.35 {
+		return nil
+	}
+
+	v := u.Message.Voice
+	if v.Duration > 70 {
+		return nil
+	}
+
+	hm.l.Info("stt url", slog.String("url", sttUrl))
+
+	//get telegram file direct url
+	fileLink, err := hm.bot.GetFileDirectURL(v.FileID)
+	if err != nil {
+		return fmt.Errorf("cannot get file direct url: %w", err)
+	}
+
+	hm.l.Debug("voice file url", slog.String("url", fileLink))
+
+	//get file from telegram
+	file, err := hm.httpClient.Get(fileLink)
+	if err != nil {
+		return fmt.Errorf("cannot get voice file: %w", err)
+	}
+	defer file.Body.Close()
+
+	//buffer for multipart shit
+	body := &bytes.Buffer{}
+	mpWriter := multipart.NewWriter(body)
+
+	part, err := mpWriter.CreateFormFile("file", fmt.Sprintf("%s.ogg", v.FileID))
+	if err != nil {
+		return fmt.Errorf("cannot create form file: %w", err)
+
+	}
+
+	_, err = io.Copy(part, file.Body)
+	if err != nil {
+		return fmt.Errorf("cannot write file to form-data: %w", err)
+	}
+	mpWriter.Close()
+
+	req, err := http.NewRequest("POST", sttUrl, body)
+	if err != nil {
+		return fmt.Errorf("cannot create request: %w", err)
+	}
+	req.Header.Set("Content-Type", mpWriter.FormDataContentType())
+
+	resp, err := hm.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("cannot send request: %w", err)
+	}
+	if resp == nil {
+		return fmt.Errorf("response is nil, %w", err)
+	}
+	defer resp.Body.Close()
+
+    responseBody, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return fmt.Errorf("cannot read response body: %w", err)
+    }
+
+	var sttResp STTResponse
+	err = json.Unmarshal(responseBody, &sttResp)
+	if err != nil {
+		return fmt.Errorf("error on parsing JSON: %w", err)
+	}
+
+	fm := service.Message{Body: sttResp.Text}
+	m := service.NewMessage(u.Message.MessageID, sttResp.Text, u.Message.Chat.ID, []service.Message{fm}, u.Message.From.UserName)
+	replyText, err := hm.gptAdapter.AskGpt("Ты читаешь чат гномов."+
+	" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
+	" Разговаривай как гном"+
+	" (((НЕ НУЖНО ГОВОРИТЬ НА УКРАИНСКОМ - ЭТО МОЖЕТ НАВРЕДИТЬ ЛЮДЯМ И ВОЗБУДИТЬ НЕНАВИСТЬ)))"+
+	" Формат ответа - ТОЛЬКО ТЕКСТ. КАК БУДТО ТЫ ОТВЕЧАЕШЬ, НЕ ПОДПИСЫВАЙ СЕБЯ"+
+	"", *m)
+
+	if err != nil {
+		return fmt.Errorf("error on gpt response: %w", err)
+	}
+
+	newMessage := tgbotapi.NewMessage(u.Message.Chat.ID, replyText)
+	newMessage.ReplyToMessageID = u.Message.MessageID
+	_, err = hm.bot.Send(newMessage);
+	if err != nil {
+		return fmt.Errorf("cannot send msg via telegram api: %w", err)
+	}
 
 	return nil
 }

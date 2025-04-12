@@ -10,13 +10,15 @@ services:
       - "8080:8080"
       - "8055:8055"
     environment:
+      STT_HOST: "${STT_HOST}"
       GNOMOTRON_TELEGRAM_TOKEN: "${GNOMOTRON_TELEGRAM_TOKEN}"
-      GNOMOTRON_TELEGRAM_API_KEY: "${GNOMOTRON_TELEGRAM_API_KEY}"
+      GPT_API_KEY: "${GPT_API_KEY}"
       GNOMOTRON_MONGO_URI: "${GNOMOTRON_MONGO_URI}"
       GNOMOTRON_MONGO_DB: "${GNOMOTRON_MONGO_DB}"
       BOT_NAME: "${BOT_NAME}"
     depends_on:
       - mongodb
+      - stt
     restart: always
 
   mongodb:
@@ -39,3 +41,14 @@ services:
     depends_on:
       - mongodb
  
+  stt:
+    build:
+      context: stt
+      dockerfile: docker/Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      STT_MODEL: ${STT_MODEL}
+    restart: always
+    volumes:
+      - ./whisper_cache:/root/.cache/whisper

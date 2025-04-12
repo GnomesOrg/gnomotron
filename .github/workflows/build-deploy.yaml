@@ -78,7 +78,9 @@ jobs:
 
       - name: start the container with the new version
         env:
-          GNOMOTRON_TELEGRAM_API_KEY: ${{ secrets.GNOMOTRON_TELEGRAM_API_KEY }}
+          STT_HOST: ${{ vars.STT_HOST }}
+          STT_MODEL: ${{ vars.STT_MODEL }}
+          GPT_API_KEY: ${{ secrets.GPT_API_KEY }}
           GNOMOTRON_MONGO_DB: ${{ secrets.GNOMOTRON_MONGO_DB }}
           MONGO_INITDB_ROOT_USERNAME: ${{ secrets.MONGO_INITDB_ROOT_USERNAME }}
           GNOMOTRON_TELEGRAM_TOKEN: ${{ secrets.GNOMOTRON_TELEGRAM_TOKEN }}

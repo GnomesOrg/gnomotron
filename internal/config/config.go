@@ -7,14 +7,16 @@ import (
 )
 
 type Config struct {
-	TOKEN             string
-	APIKEY            string
-	MONGO_URI         string
-	MONGO_DB          string
-	BOT_NAME          string
-	MAX_DIALOGUE_SIZE int
-	BOT_DEGUB         bool
-	GPT_ENDPOINT      string
+	TOKEN                 string
+	APIKEY                string
+	MONGO_URI             string
+	MONGO_DB              string
+	BOT_NAME              string
+	MAX_DIALOGUE_SIZE     int
+	BOT_DEBUG             bool
+	GPT_ENDPOINT          string
+	STT_ENDPOINT          string
+	STT_HOST string
 }
 
 func LoadConfig() *Config {
@@ -27,10 +29,11 @@ func LoadConfig() *Config {
 	}
 
 	viper.BindEnv("TOKEN", "GNOMOTRON_TELEGRAM_TOKEN")
-	viper.BindEnv("APIKEY", "GNOMOTRON_TELEGRAM_API_KEY")
+	viper.BindEnv("APIKEY", "GPT_API_KEY")
 	viper.BindEnv("MONGO_URI", "GNOMOTRON_MONGO_URI")
 	viper.BindEnv("MONGO_DB", "GNOMOTRON_MONGO_DB")
 	viper.BindEnv("BOT_NAME", "BOT_NAME")
+	viper.BindEnv("STT_HOST", "STT_HOST")
 
 	cfg := &Config{}
 	if err := viper.Unmarshal(cfg); err != nil {
