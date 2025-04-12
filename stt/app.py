@@ -8,14 +8,14 @@ import os
 app = Flask(__name__)
 
 modelName = os.getenv("STT_MODEL", "small")
-model = whisper.load_model(modelName)
+model = whisper.load_model(modelName, in_memory=False)
 print(f"modelName: {modelName}", flush=True)
 print(f"available models: {whisper.available_models()}", flush=True)
 
 @app.route("/stt", methods=["POST"])
 def transcribe():
     print("Received request", flush=True)
-    
+
     if "file" not in request.files:
         return {"error": "No file provided"}, 400
 
