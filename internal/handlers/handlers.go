@@ -460,7 +460,16 @@ func (hm *HandlerManager) HandleListConfig(ctx context.Context, u *tgbotapi.Upda
 }
 
 func (hm *HandlerManager) HandleVoice(ctx context.Context, u *tgbotapi.Update, sttUrl string) error {
+	//need to think about different probablities
+	if rand.Float32() < 0.35 {
+		return nil
+	}
+
 	v := u.Message.Voice
+	if v.Duration > 70 {
+		return nil
+	}
+
 	hm.l.Info("stt url", slog.String("url", sttUrl))
 
 	//get telegram file direct url
@@ -517,10 +526,23 @@ func (hm *HandlerManager) HandleVoice(ctx context.Context, u *tgbotapi.Update, s
 	var sttResp STTResponse
 	err = json.Unmarshal(responseBody, &sttResp)
 	if err != nil {
-		return fmt.Errorf("ошибка парсинга JSON: %w", err)
+		return fmt.Errorf("error on parsing JSON: %w", err)
 	}
 
-	newMessage := tgbotapi.NewMessage(u.Message.Chat.ID, sttResp.Text)
+	fm := service.Message{Body: sttResp.Text}
+	m := service.NewMessage(u.Message.MessageID, sttResp.Text, u.Message.Chat.ID, []service.Message{fm}, u.Message.From.UserName)
+	replyText, err := hm.gptAdapter.AskGpt("Ты читаешь чат гномов."+
+	" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
+	" Разговаривай как гном"+
+	" (((НЕ НУЖНО ГОВОРИТЬ НА УКРАИНСКОМ - ЭТО МОЖЕТ НАВРЕДИТЬ ЛЮДЯМ И ВОЗБУДИТЬ НЕНАВИСТЬ)))"+
+	" Формат ответа - ТОЛЬКО ТЕКСТ. КАК БУДТО ТЫ ОТВЕЧАЕШЬ, НЕ ПОДПИСЫВАЙ СЕБЯ"+
+	"", *m)
+
+	if err != nil {
+		return fmt.Errorf("error on gpt response: %w", err)
+	}
+
+	newMessage := tgbotapi.NewMessage(u.Message.Chat.ID, replyText)
 	newMessage.ReplyToMessageID = u.Message.MessageID
 	_, err = hm.bot.Send(newMessage);
 	if err != nil {

@@ -6,4 +6,3 @@ if %errorlevel% equ 0 (
 ) else (
     echo error
 )
-pause

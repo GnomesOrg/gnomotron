@@ -48,7 +48,7 @@ services:
     ports:
       - "5000:5000"
     environment:
-      STT_MODEL: "small"
+      STT_MODEL: ${STT_MODEL}
     restart: always
     volumes:
       - ./whisper_cache:/root/.cache/whisper
