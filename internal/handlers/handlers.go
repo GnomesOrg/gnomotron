@@ -461,9 +461,9 @@ func (hm *HandlerManager) HandleListConfig(ctx context.Context, u *tgbotapi.Upda
 
 func (hm *HandlerManager) HandleVoice(ctx context.Context, u *tgbotapi.Update, sttUrl string) error {
 	//need to think about different probablities
-	if rand.Float32() < 0.35 {
-		return nil
-	}
+	// if rand.Float32() < 0.35 {
+	// 	return nil
+	// }
 
 	v := u.Message.Voice
 	if v.Duration > 70 {
@@ -503,7 +503,7 @@ func (hm *HandlerManager) HandleVoice(ctx context.Context, u *tgbotapi.Update, s
 	}
 	mpWriter.Close()
 
-	req, err := http.NewRequest("POST", sttUrl, body)
+	req, err := http.NewRequestWithContext(ctx, "POST", sttUrl, body)
 	if err != nil {
 		return fmt.Errorf("cannot create request: %w", err)
 	}

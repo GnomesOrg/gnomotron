@@ -37,14 +37,14 @@ func main() {
 
 	//DB init
 	clientOptions := options.Client().ApplyURI(cfg.MONGO_URI)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	client, err := mongo.Connect(ctx, clientOptions)
 	defer cancel()
 	if err != nil {
 		l.Error("error on connect to mongo", slog.Any("error", err))
 	}
 
-	httpCl := http.Client{Timeout: 30 * time.Second}
+	httpCl := http.Client{}
 	rCol := client.Database(cfg.MONGO_DB).Collection(service.RemindCollection)
 	mCol := client.Database(cfg.MONGO_DB).Collection(service.MessageCollection)
 	cCol := client.Database(cfg.MONGO_DB).Collection(service.ChatCollection)
@@ -118,7 +118,10 @@ func main() {
 						}
 
 						if upd.Message.Voice != nil {
-							err = handlerManager.HandleVoice(botCtx, &upd, fmt.Sprintf("%s:5000/stt", cfg.STT_HOST))
+							ttsCtx, ttsCancel := context.WithTimeout(context.Background(), 120*time.Second)
+							defer ttsCancel()
+
+							err = handlerManager.HandleVoice(ttsCtx, &upd, fmt.Sprintf("%s:5000/stt", cfg.STT_HOST))
 							break
 						}
 

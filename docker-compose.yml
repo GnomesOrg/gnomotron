@@ -18,6 +18,7 @@ services:
       GNOMOTRON_MONGO_DB: "${GNOMOTRON_MONGO_DB}"
       BOT_NAME: "${BOT_NAME}"
     depends_on:
+      - mongoclient
       - mongodb
       - stt
     restart: always
@@ -50,7 +51,7 @@ services:
       - "5000:5000"
     environment:
       STT_MODEL: ${STT_MODEL}
-    restart: always
+    restart: unless-stopped
     volumes:
       - whisper_cache:/root/.cache/whisper
 
