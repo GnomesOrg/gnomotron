@@ -95,7 +95,7 @@ func main() {
 
 			for upd := range updates {
 				if upd.Message != nil {
-					
+					handler.HandleUpdate(botCtx, &upd)
 				}
 
 				if upd.CallbackQuery != nil {
