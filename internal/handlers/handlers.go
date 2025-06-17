@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flabergnomebot/internal/config"
 	"flabergnomebot/internal/gptadapter"
 	"flabergnomebot/internal/service"
 	"fmt"
@@ -16,20 +17,31 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-type HandlerManager struct {
+type HandlerConfig struct {
+	Bot        *tgbotapi.BotAPI
+	GptAdapter *gptadapter.GptAdapter
+	RRepo      *service.RemindRepository
+	MRepo      *service.ChatRepository
+	CRepo      *service.ChatRepository
+	Cfg        *config.Config
+	HttpClient *http.Client
+}
+
+type Handler struct {
 	bot        *tgbotapi.BotAPI
 	gptAdapter *gptadapter.GptAdapter
 	rRepo      *service.RemindRepository
 	mRepo      *service.ChatRepository
 	cRepo      *service.ChatRepository
-	l          *slog.Logger
-	botName    string
+	cfg        *config.Config
 	httpClient *http.Client
+	l          *slog.Logger
 }
 
 type STTResponse struct {
@@ -37,28 +49,82 @@ type STTResponse struct {
 }
 
 func New(
-	bot *tgbotapi.BotAPI,
-	adapter *gptadapter.GptAdapter,
-	rRepo *service.RemindRepository,
-	mRepo *service.ChatRepository,
-	cRepo *service.ChatRepository,
+	hc *HandlerConfig,
 	l *slog.Logger,
-	botName string,
-	httpClient *http.Client,
-) *HandlerManager {
-	return &HandlerManager{
-		bot:        bot,
-		gptAdapter: adapter,
-		rRepo:      rRepo,
-		mRepo:      mRepo,
-		cRepo:      cRepo,
+) *Handler {
+	return &Handler{
+		bot:        hc.Bot,
+		gptAdapter: hc.GptAdapter,
+		rRepo:      hc.RRepo,
+		mRepo:      hc.MRepo,
+		cRepo:      hc.CRepo,
+		cfg:        hc.Cfg,
+		httpClient: hc.HttpClient,
 		l:          l,
-		botName:    botName,
-		httpClient: httpClient,
 	}
 }
 
-func (hm *HandlerManager) HandleHelp(update *tgbotapi.Update) error {
+func (h *Handler) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) error {
+	h.l.Info(
+		"new message",
+		slog.Int64("chat id", upd.Message.Chat.ID),
+		slog.Int("message id", upd.Message.MessageID),
+		slog.String("username", upd.Message.From.UserName),
+		slog.String("body", upd.Message.Text),
+	)
+	var err error
+	switch upd.Message.CommandWithAt() {
+	case "start@" + h.cfg.BOT_NAME:
+		h.HandleStart(ctx, upd)
+	case "help@" + h.cfg.BOT_NAME:
+		err = h.HandleHelp(upd)
+	case "af@" + h.cfg.BOT_NAME:
+		err = h.HandleAskFlaber(ctx, upd)
+	case "nr@" + h.cfg.BOT_NAME:
+		err = h.HandleNewRemind(ctx, upd)
+	case "lr@" + h.cfg.BOT_NAME:
+		err = h.HandleListRemind(ctx, upd)
+	case "dr@" + h.cfg.BOT_NAME:
+		err = h.HandleDeleteListRemind(ctx, upd)
+	case "chp@" + h.cfg.BOT_NAME:
+		err = h.HandleChangeConfig(ctx, upd)
+	case "lp@" + h.cfg.BOT_NAME:
+		err = h.HandleListConfig(ctx, upd)
+	default:
+		if upd.Message.ReplyToMessage != nil && upd.Message.ReplyToMessage.From.UserName == h.cfg.BOT_NAME {
+			// handle only replies of gnomotron messages
+
+			err = h.HandleReply(ctx, upd)
+			break
+		}
+
+		if upd.Message.Voice != nil {
+			ttsCtx, ttsCancel := context.WithTimeout(context.Background(), 400*time.Second)
+			defer ttsCancel()
+
+			err = h.HandleVoice(ttsCtx, upd)
+			break
+		}
+
+		if upd.Message.Photo != nil {
+			err = h.HandleImage(ctx, upd)
+			break
+		}
+
+		if upd.Message.Text != "" {
+			err = h.HandleEcho(ctx, upd)
+			break
+		}
+	}
+
+	if err != nil {
+		h.l.Error(fmt.Sprintf("error while handling messages: %+v", err))
+	}
+
+	return nil
+}
+
+func (h *Handler) HandleHelp(update *tgbotapi.Update) error {
 	replyMsg := tgbotapi.NewMessage(
 		update.Message.Chat.ID,
 		fmt.Sprintf("Current chat id is: %d", int(update.Message.Chat.ID))+
@@ -74,18 +140,18 @@ func (hm *HandlerManager) HandleHelp(update *tgbotapi.Update) error {
 			"\n\r/chp",
 	)
 	replyMsg.ReplyToMessageID = update.Message.MessageID
-	if _, err := hm.bot.Send(replyMsg); err != nil {
+	if _, err := h.bot.Send(replyMsg); err != nil {
 		return fmt.Errorf("cannot send msg via telegram api: %w", err)
 	}
 
 	return nil
 }
 
-func (hm *HandlerManager) HandleNewRemind(ctx context.Context, u *tgbotapi.Update) error {
+func (h *Handler) HandleNewRemind(ctx context.Context, u *tgbotapi.Update) error {
 	m := u.Message.CommandArguments()
 	r, err := ExtractRemindFromStr(m)
 	if err != nil || r == nil {
-		_, sendErr := hm.bot.Send(tgbotapi.NewMessage(u.Message.Chat.ID, "У меня не получилось :("))
+		_, sendErr := h.bot.Send(tgbotapi.NewMessage(u.Message.Chat.ID, "У меня не получилось :("))
 		if sendErr != nil {
 			return fmt.Errorf("cannot send msg via telegram api: %w", sendErr)
 		}
@@ -95,37 +161,37 @@ func (hm *HandlerManager) HandleNewRemind(ctx context.Context, u *tgbotapi.Updat
 
 	r.ChatID = u.Message.Chat.ID
 
-	_, err = hm.rRepo.AddRemind(ctx, *r)
+	_, err = h.rRepo.AddRemind(ctx, *r)
 	if err != nil {
-		hm.l.Error("cannot push remind to db: %w", slog.Any("err", err))
+		h.l.Error("cannot push remind to db: %w", slog.Any("err", err))
 		return err
 	}
 
 	replyMsg := tgbotapi.NewMessage(r.ChatID, "Я запомнил!")
 	replyMsg.ReplyToMessageID = u.Message.MessageID
-	if _, err = hm.bot.Send(replyMsg); err != nil {
+	if _, err = h.bot.Send(replyMsg); err != nil {
 		return fmt.Errorf("cannot send msg via telegram api: %w", err)
 	}
 
 	return nil
 }
 
-func (hm *HandlerManager) HandleStart(ctx context.Context, u *tgbotapi.Update) error {
+func (h *Handler) HandleStart(ctx context.Context, u *tgbotapi.Update) error {
 	replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, "My name is Flaber, hello friend")
 	replyMsg.ReplyToMessageID = u.Message.MessageID
-	if _, err := hm.bot.Send(replyMsg); err != nil {
+	if _, err := h.bot.Send(replyMsg); err != nil {
 		return fmt.Errorf("cannot send msg via telegram api: %w", err)
 	}
 	c := service.NewChat(u.FromChat().ID, u.FromChat().Title)
-	if err := hm.cRepo.AddChat(ctx, *c); err != nil {
+	if err := h.cRepo.AddChat(ctx, *c); err != nil {
 		return fmt.Errorf("error on chat addition: %w", err)
 	}
 
 	return nil
 }
 
-func (hm *HandlerManager) HandleImage(ctx context.Context, u *tgbotapi.Update) error {
-	if hm.shouldReply(ctx, u.FromChat().ID) {
+func (h *Handler) HandleImage(ctx context.Context, u *tgbotapi.Update) error {
+	if h.shouldReply(ctx, u.FromChat().ID) {
 		responses := []string{
 			"Удали.",
 			"ПХАХПАХпхпхаПА",
@@ -135,20 +201,20 @@ func (hm *HandlerManager) HandleImage(ctx context.Context, u *tgbotapi.Update) e
 		randomIndex := rand.Intn(len(responses))
 		resp := tgbotapi.NewMessage(u.Message.Chat.ID, responses[randomIndex])
 		resp.ReplyToMessageID = u.Message.MessageID
-		if _, err := hm.bot.Send(resp); err != nil {
+		if _, err := h.bot.Send(resp); err != nil {
 			return fmt.Errorf("cannot send msg via telegram api: %w", err)
 		}
 	}
 	return nil
 }
 
-func (hm *HandlerManager) HandleEcho(ctx context.Context, u *tgbotapi.Update) error {
-	if hm.shouldReply(ctx, u.FromChat().ID) && len(u.Message.Text) > 40 {
+func (h *Handler) HandleEcho(ctx context.Context, u *tgbotapi.Update) error {
+	if h.shouldReply(ctx, u.FromChat().ID) && len(u.Message.Text) > 40 {
 		sm := service.NewMessage(u.Message.MessageID, u.Message.Text, u.Message.Chat.ID, []service.Message{}, u.Message.From.UserName)
 		m := service.NewMessage(u.Message.MessageID, u.Message.Text, u.Message.Chat.ID, []service.Message{}, u.Message.From.UserName)
 		m.Replies = append(m.Replies, *sm)
 
-		replyText, err := hm.gptAdapter.AskGpt("Ты получил сообщение из чата гномов вне контекста."+
+		replyText, err := h.gptAdapter.AskGpt("Ты получил сообщение из чата гномов вне контекста."+
 			" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
 			" Разговаривай как гном"+
 			" (((НЕ НУЖНО ГОВОРИТЬ НА УКРАИНСКОМ - ЭТО МОЖЕТ НАВРЕДИТЬ ЛЮДЯМ И ВОЗБУДИТЬ НЕНАВИСТЬ)))"+
@@ -159,7 +225,7 @@ func (hm *HandlerManager) HandleEcho(ctx context.Context, u *tgbotapi.Update) er
 
 		replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, replyText)
 		replyMsg.ReplyToMessageID = u.Message.MessageID
-		gptM, err := hm.bot.Send(replyMsg)
+		gptM, err := h.bot.Send(replyMsg)
 		if err != nil {
 			return fmt.Errorf("cannot send msg via telegram api: %w", err)
 		}
@@ -169,7 +235,7 @@ func (hm *HandlerManager) HandleEcho(ctx context.Context, u *tgbotapi.Update) er
 			gptM.Text,
 			gptM.Chat.ID,
 			[]service.Message{},
-			hm.botName,
+			h.cfg.BOT_NAME,
 		)
 
 		m.Replies = append(m.Replies, *newBotM)
@@ -179,10 +245,10 @@ func (hm *HandlerManager) HandleEcho(ctx context.Context, u *tgbotapi.Update) er
 			gptM.Text,
 			gptM.Chat.ID,
 			m.Replies,
-			hm.botName,
+			h.cfg.BOT_NAME,
 		)
 
-		hm.mRepo.AddMessage(ctx, *newBotTgM)
+		h.mRepo.AddMessage(ctx, *newBotTgM)
 
 		return nil
 	}
@@ -190,7 +256,7 @@ func (hm *HandlerManager) HandleEcho(ctx context.Context, u *tgbotapi.Update) er
 	return nil
 }
 
-func (hm *HandlerManager) HandleAskFlaber(ctx context.Context, u *tgbotapi.Update) error {
+func (h *Handler) HandleAskFlaber(ctx context.Context, u *tgbotapi.Update) error {
 	m := service.NewMessage(
 		u.Message.MessageID,
 		u.Message.CommandArguments(),
@@ -207,7 +273,7 @@ func (hm *HandlerManager) HandleAskFlaber(ctx context.Context, u *tgbotapi.Updat
 		u.Message.From.UserName,
 	)
 
-	replyText, err := hm.gptAdapter.AskGpt("Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
+	replyText, err := h.gptAdapter.AskGpt("Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
 		" Разговаривай как гном"+
 		" (((НЕ НУЖНО ГОВОРИТЬ НА УКРАИНСКОМ - ЭТО МОЖЕТ НАВРЕДИТЬ ЛЮДЯМ И ВОЗБУДИТЬ НЕНАВИСТЬ)))"+
 		" ВАЖНО ОТВЕЧАТЬ ОТ ПЕРВОГО ЛИЦА", *m)
@@ -217,7 +283,7 @@ func (hm *HandlerManager) HandleAskFlaber(ctx context.Context, u *tgbotapi.Updat
 
 	replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, replyText)
 	replyMsg.ReplyToMessageID = u.Message.MessageID
-	gptM, err := hm.bot.Send(replyMsg)
+	gptM, err := h.bot.Send(replyMsg)
 	if err != nil {
 		return fmt.Errorf("cannot send msg via telegram api: %w", err)
 	}
@@ -227,7 +293,7 @@ func (hm *HandlerManager) HandleAskFlaber(ctx context.Context, u *tgbotapi.Updat
 		gptM.Text,
 		gptM.Chat.ID,
 		[]service.Message{},
-		hm.botName,
+		h.cfg.BOT_NAME,
 	)
 
 	m.Replies = append(m.Replies, *newBotM)
@@ -237,16 +303,16 @@ func (hm *HandlerManager) HandleAskFlaber(ctx context.Context, u *tgbotapi.Updat
 		gptM.Text,
 		gptM.Chat.ID,
 		m.Replies,
-		hm.botName,
+		h.cfg.BOT_NAME,
 	)
 
-	hm.mRepo.AddMessage(ctx, *newBotTgM)
+	h.mRepo.AddMessage(ctx, *newBotTgM)
 
 	return nil
 }
 
-func (hm *HandlerManager) HandleReply(ctx context.Context, u *tgbotapi.Update) error {
-	lastM, err := hm.mRepo.FindMessageByTelegramId(ctx, u.Message.ReplyToMessage.MessageID)
+func (h *Handler) HandleReply(ctx context.Context, u *tgbotapi.Update) error {
+	lastM, err := h.mRepo.FindMessageByTelegramId(ctx, u.Message.ReplyToMessage.MessageID)
 	if err != nil {
 		return err
 	}
@@ -256,7 +322,7 @@ func (hm *HandlerManager) HandleReply(ctx context.Context, u *tgbotapi.Update) e
 		u.Message.ReplyToMessage.Text,
 		u.Message.Chat.ID,
 		[]service.Message{},
-		hm.botName,
+		h.cfg.BOT_NAME,
 	)
 
 	if lastM != nil {
@@ -273,7 +339,7 @@ func (hm *HandlerManager) HandleReply(ctx context.Context, u *tgbotapi.Update) e
 
 	botM.Replies = append(botM.Replies, *userM)
 
-	replyText, err := hm.gptAdapter.AskGpt("Ты читаешь чат гномов."+
+	replyText, err := h.gptAdapter.AskGpt("Ты читаешь чат гномов."+
 		" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
 		" Разговаривай как гном"+
 		" (((НЕ НУЖНО ГОВОРИТЬ НА УКРАИНСКОМ - ЭТО МОЖЕТ НАВРЕДИТЬ ЛЮДЯМ И ВОЗБУДИТЬ НЕНАВИСТЬ)))"+
@@ -285,7 +351,7 @@ func (hm *HandlerManager) HandleReply(ctx context.Context, u *tgbotapi.Update) e
 
 	replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, replyText)
 	replyMsg.ReplyToMessageID = u.Message.MessageID
-	gptM, err := hm.bot.Send(replyMsg)
+	gptM, err := h.bot.Send(replyMsg)
 	if err != nil {
 		return fmt.Errorf("cannot send msg via telegram api: %w", err)
 	}
@@ -295,7 +361,7 @@ func (hm *HandlerManager) HandleReply(ctx context.Context, u *tgbotapi.Update) e
 		gptM.Text,
 		gptM.Chat.ID,
 		[]service.Message{},
-		hm.botName,
+		h.cfg.BOT_NAME,
 	)
 
 	botM.Replies = append(botM.Replies, *newBotM)
@@ -305,10 +371,10 @@ func (hm *HandlerManager) HandleReply(ctx context.Context, u *tgbotapi.Update) e
 		gptM.Text,
 		gptM.Chat.ID,
 		botM.Replies,
-		hm.botName,
+		h.cfg.BOT_NAME,
 	)
 
-	hm.mRepo.AddMessage(ctx, *newBotTgM)
+	h.mRepo.AddMessage(ctx, *newBotTgM)
 
 	return nil
 }
@@ -323,8 +389,8 @@ func ExtractRemindFromStr(input string) (*service.Remind, error) {
 	return service.NewRemind(matches[1], matches[2], -1), nil
 }
 
-func (hm *HandlerManager) HandleListRemind(ctx context.Context, u *tgbotapi.Update) error {
-	rl, err := hm.rRepo.ListRemindByChat(ctx, u.Message.Chat.ID)
+func (h *Handler) HandleListRemind(ctx context.Context, u *tgbotapi.Update) error {
+	rl, err := h.rRepo.ListRemindByChat(ctx, u.Message.Chat.ID)
 	if err != nil {
 		return fmt.Errorf("cannot get remind list: %w", err)
 	}
@@ -332,7 +398,7 @@ func (hm *HandlerManager) HandleListRemind(ctx context.Context, u *tgbotapi.Upda
 	if len(rl) == 0 {
 		replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, "У вас нет напоминаний")
 		replyMsg.ReplyToMessageID = u.Message.MessageID
-		if _, err = hm.bot.Send(replyMsg); err != nil {
+		if _, err = h.bot.Send(replyMsg); err != nil {
 			return fmt.Errorf("cannot send msg via telegram api: %w", err)
 		}
 		return nil
@@ -347,15 +413,15 @@ func (hm *HandlerManager) HandleListRemind(ctx context.Context, u *tgbotapi.Upda
 	replyMsg.ParseMode = "HTML"
 	replyMsg.ReplyToMessageID = u.Message.MessageID
 
-	if _, err = hm.bot.Send(replyMsg); err != nil {
+	if _, err = h.bot.Send(replyMsg); err != nil {
 		return fmt.Errorf("cannot send msg via telegram api: %w", err)
 	}
 
 	return nil
 }
 
-func (hm *HandlerManager) HandleDeleteListRemind(ctx context.Context, u *tgbotapi.Update) error {
-	rl, err := hm.rRepo.ListRemindByChat(ctx, u.Message.Chat.ID)
+func (h *Handler) HandleDeleteListRemind(ctx context.Context, u *tgbotapi.Update) error {
+	rl, err := h.rRepo.ListRemindByChat(ctx, u.Message.Chat.ID)
 	if err != nil {
 		return fmt.Errorf("cannot get remind list: %w", err)
 	}
@@ -363,7 +429,7 @@ func (hm *HandlerManager) HandleDeleteListRemind(ctx context.Context, u *tgbotap
 	if len(rl) == 0 {
 		replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, "У вас нет напоминаний")
 		replyMsg.ReplyToMessageID = u.Message.MessageID
-		if _, err = hm.bot.Send(replyMsg); err != nil {
+		if _, err = h.bot.Send(replyMsg); err != nil {
 			return fmt.Errorf("cannot send msg via telegram api: %w", err)
 		}
 		return nil
@@ -382,14 +448,14 @@ func (hm *HandlerManager) HandleDeleteListRemind(ctx context.Context, u *tgbotap
 	replyMsg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(buttons...)
 	replyMsg.ReplyToMessageID = u.Message.MessageID
 
-	if _, err = hm.bot.Send(replyMsg); err != nil {
+	if _, err = h.bot.Send(replyMsg); err != nil {
 		return fmt.Errorf("cannot send msg via telegram api: %w", err)
 	}
 
 	return nil
 }
 
-func (hm *HandlerManager) HandleDeleteRemind(ctx context.Context, u *tgbotapi.Update) error {
+func (h *Handler) HandleDeleteRemind(ctx context.Context, u *tgbotapi.Update) error {
 	if u.CallbackQuery == nil {
 		return fmt.Errorf("callback query is nil")
 	}
@@ -406,12 +472,12 @@ func (hm *HandlerManager) HandleDeleteRemind(ctx context.Context, u *tgbotapi.Up
 		return fmt.Errorf("cannot parse remind ID: %w", err)
 	}
 
-	err = hm.rRepo.DeleteRemind(ctx, rId)
+	err = h.rRepo.DeleteRemind(ctx, rId)
 	if err != nil {
 		return fmt.Errorf("cannot delete remind: %w", err)
 	}
 
-	rl, err := hm.rRepo.ListRemindByChat(ctx, u.CallbackQuery.Message.Chat.ID)
+	rl, err := h.rRepo.ListRemindByChat(ctx, u.CallbackQuery.Message.Chat.ID)
 	if err != nil {
 		return fmt.Errorf("cannot get updated remind list: %w", err)
 	}
@@ -427,61 +493,59 @@ func (hm *HandlerManager) HandleDeleteRemind(ctx context.Context, u *tgbotapi.Up
 
 	if len(rl) == 0 {
 		editMsg := tgbotapi.NewEditMessageText(u.CallbackQuery.Message.Chat.ID, u.CallbackQuery.Message.MessageID, "У вас нет напоминаний")
-		if _, err := hm.bot.Send(editMsg); err != nil {
+		if _, err := h.bot.Send(editMsg); err != nil {
 			return fmt.Errorf("cannot edit message: %w", err)
 		}
 	} else {
 		editMsg := tgbotapi.NewEditMessageReplyMarkup(u.CallbackQuery.Message.Chat.ID, u.CallbackQuery.Message.MessageID, tgbotapi.NewInlineKeyboardMarkup(buttons...))
-		if _, err := hm.bot.Send(editMsg); err != nil {
+		if _, err := h.bot.Send(editMsg); err != nil {
 			return fmt.Errorf("cannot update keyboard: %w", err)
 		}
 	}
 
 	callback := tgbotapi.NewCallback(u.CallbackQuery.ID, "Напоминание удалено ✅")
-	if _, err := hm.bot.Request(callback); err != nil {
+	if _, err := h.bot.Request(callback); err != nil {
 		return fmt.Errorf("cannot send callback response: %w", err)
 	}
 
 	return nil
 }
 
-func (hm *HandlerManager) HandleListConfig(ctx context.Context, u *tgbotapi.Update) error {
-	ch, err := hm.cRepo.FindChatByChatId(ctx, u.FromChat().ID)
+func (h *Handler) HandleListConfig(ctx context.Context, u *tgbotapi.Update) error {
+	ch, err := h.cRepo.FindChatByChatId(ctx, u.FromChat().ID)
 	if err != nil {
-		hm.l.Error("cannot find chat by chat id", slog.Int64("chatId", u.FromChat().ID), slog.Any("err", err))
+		h.l.Error("cannot find chat by chat id", slog.Int64("chatId", u.FromChat().ID), slog.Any("err", err))
 
 		return nil
 	}
 
-	hm.bot.Send(tgbotapi.NewMessage(u.Message.Chat.ID, fmt.Sprintf("Шанс ответа сейчас: %.2f %% \n"+
+	h.bot.Send(tgbotapi.NewMessage(u.Message.Chat.ID, fmt.Sprintf("Шанс ответа сейчас: %.2f %% \n"+
 		"чтобы изменить этот шанс напиши: /chp@имябота {шанс от 0 до 1}", ch.ReplyProbability*100)))
 
 	return nil
 }
 
-func (hm *HandlerManager) HandleVoice(ctx context.Context, u *tgbotapi.Update, sttUrl string) error {
+func (h *Handler) HandleVoice(ctx context.Context, u *tgbotapi.Update) error {
 	//need to think about different probablities
 	// if rand.Float32() < 0.35 {
 	// 	return nil
 	// }
 
 	v := u.Message.Voice
-	if v.Duration > 70 {
+	if v.Duration > 240 {
 		return nil
 	}
 
-	hm.l.Info("stt url", slog.String("url", sttUrl))
-
 	//get telegram file direct url
-	fileLink, err := hm.bot.GetFileDirectURL(v.FileID)
+	fileLink, err := h.bot.GetFileDirectURL(v.FileID)
 	if err != nil {
 		return fmt.Errorf("cannot get file direct url: %w", err)
 	}
 
-	hm.l.Debug("voice file url", slog.String("url", fileLink))
+	h.l.Debug("voice file url", slog.String("url", fileLink))
 
 	//get file from telegram
-	file, err := hm.httpClient.Get(fileLink)
+	file, err := h.httpClient.Get(fileLink)
 	if err != nil {
 		return fmt.Errorf("cannot get voice file: %w", err)
 	}
@@ -503,13 +567,13 @@ func (hm *HandlerManager) HandleVoice(ctx context.Context, u *tgbotapi.Update, s
 	}
 	mpWriter.Close()
 
-	req, err := http.NewRequestWithContext(ctx, "POST", sttUrl, body)
+	req, err := http.NewRequestWithContext(ctx, "POST", h.cfg.STT_URI, body)
 	if err != nil {
 		return fmt.Errorf("cannot create request: %w", err)
 	}
 	req.Header.Set("Content-Type", mpWriter.FormDataContentType())
 
-	resp, err := hm.httpClient.Do(req)
+	resp, err := h.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("cannot send request: %w", err)
 	}
@@ -518,10 +582,10 @@ func (hm *HandlerManager) HandleVoice(ctx context.Context, u *tgbotapi.Update, s
 	}
 	defer resp.Body.Close()
 
-    responseBody, err := io.ReadAll(resp.Body)
-    if err != nil {
-        return fmt.Errorf("cannot read response body: %w", err)
-    }
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("cannot read response body: %w", err)
+	}
 
 	var sttResp STTResponse
 	err = json.Unmarshal(responseBody, &sttResp)
@@ -530,13 +594,14 @@ func (hm *HandlerManager) HandleVoice(ctx context.Context, u *tgbotapi.Update, s
 	}
 
 	fm := service.Message{Body: sttResp.Text}
+
 	m := service.NewMessage(u.Message.MessageID, sttResp.Text, u.Message.Chat.ID, []service.Message{fm}, u.Message.From.UserName)
-	replyText, err := hm.gptAdapter.AskGpt("Ты читаешь чат гномов."+
-	" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
-	" Разговаривай как гном"+
-	" (((НЕ НУЖНО ГОВОРИТЬ НА УКРАИНСКОМ - ЭТО МОЖЕТ НАВРЕДИТЬ ЛЮДЯМ И ВОЗБУДИТЬ НЕНАВИСТЬ)))"+
-	" Формат ответа - ТОЛЬКО ТЕКСТ. КАК БУДТО ТЫ ОТВЕЧАЕШЬ, НЕ ПОДПИСЫВАЙ СЕБЯ"+
-	"", *m)
+	replyText, err := h.gptAdapter.AskGpt("Ты читаешь чат гномов."+
+		" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
+		" Разговаривай как гном"+
+		" (((НЕ НУЖНО ГОВОРИТЬ НА УКРАИНСКОМ - ЭТО МОЖЕТ НАВРЕДИТЬ ЛЮДЯМ И ВОЗБУДИТЬ НЕНАВИСТЬ)))"+
+		" Формат ответа - ТОЛЬКО ТЕКСТ. КАК БУДТО ТЫ ОТВЕЧАЕШЬ, НЕ ПОДПИСЫВАЙ СЕБЯ"+
+		"", *m)
 
 	if err != nil {
 		return fmt.Errorf("error on gpt response: %w", err)
@@ -544,7 +609,7 @@ func (hm *HandlerManager) HandleVoice(ctx context.Context, u *tgbotapi.Update, s
 
 	newMessage := tgbotapi.NewMessage(u.Message.Chat.ID, replyText)
 	newMessage.ReplyToMessageID = u.Message.MessageID
-	_, err = hm.bot.Send(newMessage);
+	_, err = h.bot.Send(newMessage)
 	if err != nil {
 		return fmt.Errorf("cannot send msg via telegram api: %w", err)
 	}
@@ -552,10 +617,10 @@ func (hm *HandlerManager) HandleVoice(ctx context.Context, u *tgbotapi.Update, s
 	return nil
 }
 
-func (hm *HandlerManager) HandleChangeConfig(ctx context.Context, u *tgbotapi.Update) error {
-	ch, err := hm.cRepo.FindChatByChatId(ctx, u.FromChat().ID)
+func (h *Handler) HandleChangeConfig(ctx context.Context, u *tgbotapi.Update) error {
+	ch, err := h.cRepo.FindChatByChatId(ctx, u.FromChat().ID)
 	if err != nil {
-		hm.l.Error("cannot find chat by chat id", slog.Int64("chatId", u.FromChat().ID), slog.Any("err", err))
+		h.l.Error("cannot find chat by chat id", slog.Int64("chatId", u.FromChat().ID), slog.Any("err", err))
 
 		return nil
 	}
@@ -566,16 +631,16 @@ func (hm *HandlerManager) HandleChangeConfig(ctx context.Context, u *tgbotapi.Up
 	ch.ReplyProbability = float32(fv)
 
 	if err != nil {
-		hm.l.Error("failed to parse float", slog.String("arg", arg), slog.Any("err", err))
+		h.l.Error("failed to parse float", slog.String("arg", arg), slog.Any("err", err))
 		return nil
 	}
 
-	err = hm.cRepo.UpdateChat(ctx, ch)
+	err = h.cRepo.UpdateChat(ctx, ch)
 	if err != nil {
-		hm.l.Error("failed to update chat", slog.Int64("chatId", u.FromChat().ID), slog.Any("err", err))
+		h.l.Error("failed to update chat", slog.Int64("chatId", u.FromChat().ID), slog.Any("err", err))
 	}
 
-	_, err = hm.bot.Send(tgbotapi.NewMessage(u.Message.Chat.ID, fmt.Sprintf("Шанс ответа теперь: %.2f %% \n", ch.ReplyProbability*100)))
+	_, err = h.bot.Send(tgbotapi.NewMessage(u.Message.Chat.ID, fmt.Sprintf("Шанс ответа теперь: %.2f %% \n", ch.ReplyProbability*100)))
 	if err != nil {
 		return fmt.Errorf("cannot send msg via telegram api: %w", err)
 	}
@@ -583,15 +648,15 @@ func (hm *HandlerManager) HandleChangeConfig(ctx context.Context, u *tgbotapi.Up
 	return nil
 }
 
-func (hm *HandlerManager) shouldReply(ctx context.Context, cID int64) bool {
-	ch, err := hm.cRepo.FindChatByChatId(ctx, cID)
+func (h *Handler) shouldReply(ctx context.Context, cID int64) bool {
+	ch, err := h.cRepo.FindChatByChatId(ctx, cID)
 	if err != nil {
-		hm.l.Error("cannot find chat by chat id", slog.Int64("chatId", cID), slog.Any("err", err))
+		h.l.Error("cannot find chat by chat id", slog.Int64("chatId", cID), slog.Any("err", err))
 
 		return false
 	}
 
-	hm.l.Debug("debug reply probability", slog.Any("replyProbability", ch.ReplyProbability))
+	h.l.Debug("debug reply probability", slog.Any("replyProbability", ch.ReplyProbability))
 
 	return ch.ReplyProbability > rand.Float32()
 }

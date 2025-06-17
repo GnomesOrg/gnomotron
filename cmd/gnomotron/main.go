@@ -51,7 +51,18 @@ func main() {
 	remindRepo := service.NewRemindRepository(rCol, l)
 	mRepo := service.NewRepository(mCol, l, cfg)
 	cRepo := service.NewRepository(cCol, l, cfg)
-	handlerManager := handlers.New(bot, adapter, remindRepo, mRepo, cRepo, l, cfg.BOT_NAME, &httpCl)
+
+	hc := &handlers.HandlerConfig{
+		Bot:        bot,
+		GptAdapter: adapter,
+		RRepo:      remindRepo,
+		MRepo:      mRepo,
+		CRepo:      cRepo,
+		Cfg:        cfg,
+		HttpClient: &httpCl,
+	}
+
+	handler := handlers.New(hc, l)
 
 	botCtx := context.Background()
 
@@ -84,67 +95,13 @@ func main() {
 
 			for upd := range updates {
 				if upd.Message != nil {
-					l.Info(
-						"new message",
-						slog.Int64("chat id", upd.Message.Chat.ID),
-						slog.Int("message id", upd.Message.MessageID),
-						slog.String("username", upd.Message.From.UserName),
-						slog.String("body", upd.Message.Text),
-					)
-					var err error
-					switch upd.Message.CommandWithAt() {
-					case "start@" + cfg.BOT_NAME:
-						handlerManager.HandleStart(botCtx, &upd)
-					case "help@" + cfg.BOT_NAME:
-						err = handlerManager.HandleHelp(&upd)
-					case "af@" + cfg.BOT_NAME:
-						err = handlerManager.HandleAskFlaber(botCtx, &upd)
-					case "nr@" + cfg.BOT_NAME:
-						err = handlerManager.HandleNewRemind(botCtx, &upd)
-					case "lr@" + cfg.BOT_NAME:
-						err = handlerManager.HandleListRemind(botCtx, &upd)
-					case "dr@" + cfg.BOT_NAME:
-						err = handlerManager.HandleDeleteListRemind(botCtx, &upd)
-					case "chp@" + cfg.BOT_NAME:
-						err = handlerManager.HandleChangeConfig(botCtx, &upd)
-					case "lp@" + cfg.BOT_NAME:
-						err = handlerManager.HandleListConfig(botCtx, &upd)
-					default:
-						if upd.Message.ReplyToMessage != nil && upd.Message.ReplyToMessage.From.UserName == cfg.BOT_NAME {
-							// handle only replies of gnomotron messages
-
-							err = handlerManager.HandleReply(botCtx, &upd)
-							break
-						}
-
-						if upd.Message.Voice != nil {
-							ttsCtx, ttsCancel := context.WithTimeout(context.Background(), 120*time.Second)
-							defer ttsCancel()
-
-							err = handlerManager.HandleVoice(ttsCtx, &upd, fmt.Sprintf("%s:5000/stt", cfg.STT_HOST))
-							break
-						}
-
-						if upd.Message.Photo != nil {
-							err = handlerManager.HandleImage(botCtx, &upd)
-							break
-						}
-
-						if upd.Message.Text != "" {
-							err = handlerManager.HandleEcho(botCtx, &upd)
-							break
-						}
-					}
-
-					if err != nil {
-						l.Error(fmt.Sprintf("error while handling messages: %+v", err))
-					}
+					
 				}
 
 				if upd.CallbackQuery != nil {
 					l.Debug(fmt.Sprintf("callbackQuery from [%s]: %s", upd.CallbackQuery.From.UserName, upd.CallbackQuery.Data))
 
-					err := handlerManager.HandleDeleteRemind(botCtx, &upd)
+					err := handler.HandleDeleteRemind(botCtx, &upd)
 					if err != nil {
 						l.Error(fmt.Sprintf("error while handling callback query: %+v", err))
 					}
