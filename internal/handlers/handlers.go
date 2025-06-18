@@ -21,13 +21,13 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type HandlerConfig struct {
 	Bot        *tgbotapi.BotAPI
 	GptAdapter *gptadapter.GptAdapter
 	RRepo      *service.RemindRepository
-	MRepo      *service.ChatRepository
 	CRepo      *service.ChatRepository
 	Cfg        *config.Config
 	HttpClient *http.Client
@@ -37,7 +37,6 @@ type Handler struct {
 	bot        *tgbotapi.BotAPI
 	gptAdapter *gptadapter.GptAdapter
 	rRepo      *service.RemindRepository
-	mRepo      *service.ChatRepository
 	cRepo      *service.ChatRepository
 	cfg        *config.Config
 	httpClient *http.Client
@@ -56,7 +55,6 @@ func New(
 		bot:        hc.Bot,
 		gptAdapter: hc.GptAdapter,
 		rRepo:      hc.RRepo,
-		mRepo:      hc.MRepo,
 		cRepo:      hc.CRepo,
 		cfg:        hc.Cfg,
 		httpClient: hc.HttpClient,
@@ -150,13 +148,15 @@ func (h *Handler) HandleHelp(update *tgbotapi.Update) error {
 func (h *Handler) HandleNewRemind(ctx context.Context, u *tgbotapi.Update) error {
 	m := u.Message.CommandArguments()
 	r, err := ExtractRemindFromStr(m)
-	if err != nil || r == nil {
+	if err != nil {
+		return err
+	}
+
+	if r == nil {
 		_, sendErr := h.bot.Send(tgbotapi.NewMessage(u.Message.Chat.ID, "У меня не получилось :("))
 		if sendErr != nil {
 			return fmt.Errorf("cannot send msg via telegram api: %w", sendErr)
 		}
-
-		return nil
 	}
 
 	r.ChatID = u.Message.Chat.ID
@@ -248,7 +248,7 @@ func (h *Handler) HandleEcho(ctx context.Context, u *tgbotapi.Update) error {
 			h.cfg.BOT_NAME,
 		)
 
-		h.mRepo.AddMessage(ctx, *newBotTgM)
+		h.cRepo.AddMessage(ctx, *newBotTgM)
 
 		return nil
 	}
@@ -306,13 +306,13 @@ func (h *Handler) HandleAskFlaber(ctx context.Context, u *tgbotapi.Update) error
 		h.cfg.BOT_NAME,
 	)
 
-	h.mRepo.AddMessage(ctx, *newBotTgM)
+	h.cRepo.AddMessage(ctx, *newBotTgM)
 
 	return nil
 }
 
 func (h *Handler) HandleReply(ctx context.Context, u *tgbotapi.Update) error {
-	lastM, err := h.mRepo.FindMessageByTelegramId(ctx, u.Message.ReplyToMessage.MessageID)
+	lastM, err := h.cRepo.FindMessageByTelegramId(ctx, u.Message.ReplyToMessage.MessageID)
 	if err != nil {
 		return err
 	}
@@ -374,7 +374,7 @@ func (h *Handler) HandleReply(ctx context.Context, u *tgbotapi.Update) error {
 		h.cfg.BOT_NAME,
 	)
 
-	h.mRepo.AddMessage(ctx, *newBotTgM)
+	h.cRepo.AddMessage(ctx, *newBotTgM)
 
 	return nil
 }
@@ -593,7 +593,17 @@ func (h *Handler) HandleVoice(ctx context.Context, u *tgbotapi.Update) error {
 		return fmt.Errorf("error on parsing JSON: %w", err)
 	}
 
-	fm := service.Message{Body: sttResp.Text}
+	repl, err := h.cRepo.FindMessageByTelegramId(ctx, u.Message.MessageID)
+	if err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	replies := []service.Message{}
+	if repl != nil {
+		replies = append(replies, *repl)
+	}
+
+	fm := service.Message{Body: sttResp.Text, Replies: replies}
 
 	m := service.NewMessage(u.Message.MessageID, sttResp.Text, u.Message.Chat.ID, []service.Message{fm}, u.Message.From.UserName)
 	replyText, err := h.gptAdapter.AskGpt("Ты читаешь чат гномов."+
@@ -605,6 +615,11 @@ func (h *Handler) HandleVoice(ctx context.Context, u *tgbotapi.Update) error {
 
 	if err != nil {
 		return fmt.Errorf("error on gpt response: %w", err)
+	}
+
+	err = h.cRepo.AddMessage(ctx, *m)
+	if err != nil {
+		return fmt.Errorf("cannot insert message to db: %w", err)
 	}
 
 	newMessage := tgbotapi.NewMessage(u.Message.Chat.ID, replyText)

@@ -45,18 +45,14 @@ func main() {
 	}
 
 	httpCl := http.Client{}
-	rCol := client.Database(cfg.MONGO_DB).Collection(service.RemindCollection)
-	mCol := client.Database(cfg.MONGO_DB).Collection(service.MessageCollection)
-	cCol := client.Database(cfg.MONGO_DB).Collection(service.ChatCollection)
-	remindRepo := service.NewRemindRepository(rCol, l)
-	mRepo := service.NewRepository(mCol, l, cfg)
-	cRepo := service.NewRepository(cCol, l, cfg)
+	db := client.Database(cfg.MONGO_DB)
+	remindRepo := service.NewRemindRepository(db, l)
+	cRepo := service.NewChatRepository(db, l, cfg)
 
 	hc := &handlers.HandlerConfig{
 		Bot:        bot,
 		GptAdapter: adapter,
 		RRepo:      remindRepo,
-		MRepo:      mRepo,
 		CRepo:      cRepo,
 		Cfg:        cfg,
 		HttpClient: &httpCl,
@@ -95,7 +91,14 @@ func main() {
 
 			for upd := range updates {
 				if upd.Message != nil {
-					handler.HandleUpdate(botCtx, &upd)
+					err := handler.HandleUpdate(botCtx, &upd)
+					if err != nil {
+						errMsg := fmt.Sprintf("При выполнении произошла ошибка: %+v", err)
+						_, sendErr := bot.Send(tgbotapi.NewMessage(upd.Message.Chat.ID, errMsg))
+						if sendErr != nil {
+							l.Error(fmt.Sprintf("error while sending message: %+v", err))
+						}
+					}
 				}
 
 				if upd.CallbackQuery != nil {

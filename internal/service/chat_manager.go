@@ -51,24 +51,26 @@ func NewChat(chatId int64, name string) *Chat {
 }
 
 type ChatRepository struct {
-	c   *mongo.Collection
-	l   *slog.Logger
-	cfg *config.Config
+	cCol *mongo.Collection
+	mCol *mongo.Collection
+	l    *slog.Logger
+	cfg  *config.Config
 }
 
 // Single responsibility has been violated. It's over...
-func NewRepository(c *mongo.Collection, l *slog.Logger, cfg *config.Config) *ChatRepository {
+func NewChatRepository(db *mongo.Database, l *slog.Logger, cfg *config.Config) *ChatRepository {
 	return &ChatRepository{
-		c:   c,
-		l:   l,
-		cfg: cfg,
+		cCol: db.Collection(ChatCollection),
+		mCol: db.Collection(MessageCollection),
+		l:    l,
+		cfg:  cfg,
 	}
 }
 
 func (r *ChatRepository) FindMessageByTelegramId(ctx context.Context, tId int) (*Message, error) {
 	f := bson.D{{Key: "telegram_id", Value: tId}}
 
-	cur, err := r.c.Find(ctx, f)
+	cur, err := r.cCol.Find(ctx, f)
 	if err != nil {
 		return nil, fmt.Errorf("FindMessageByTelegramIderror %w", err)
 	}
@@ -91,7 +93,7 @@ func (r *ChatRepository) AddMessage(ctx context.Context, m Message) error {
 		m.Replies = m.Replies[len(m.Replies)-int(maxDs):]
 	}
 
-	_, err := r.c.InsertOne(ctx, m)
+	_, err := r.mCol.InsertOne(ctx, m)
 	r.l.Debug("new dialogue message", slog.String("message body: ", m.Body))
 
 	if err != nil {
@@ -104,13 +106,13 @@ func (r *ChatRepository) AddMessage(ctx context.Context, m Message) error {
 func (r *ChatRepository) AddChat(ctx context.Context, c Chat) error {
 	filter := bson.M{"chatId": c.ChatID}
 	var existingChat Chat
-	err := r.c.FindOne(ctx, filter).Decode(&existingChat)
+	err := r.cCol.FindOne(ctx, filter).Decode(&existingChat)
 
 	if err != mongo.ErrNoDocuments {
 		return fmt.Errorf("failed to check for existing chat: %w", err)
 	}
 
-	_, err = r.c.InsertOne(ctx, c)
+	_, err = r.cCol.InsertOne(ctx, c)
 	if err != nil {
 		return fmt.Errorf("failed to insert chat: %w", err)
 	}
@@ -123,7 +125,7 @@ func (r *ChatRepository) AddChat(ctx context.Context, c Chat) error {
 func (r *ChatRepository) FindChatByChatId(ctx context.Context, chatId int64) (*Chat, error) {
 	f := bson.D{{Key: "chatId", Value: chatId}}
 
-	cur, err := r.c.Find(ctx, f)
+	cur, err := r.cCol.Find(ctx, f)
 	if err != nil {
 		return nil, fmt.Errorf("FindChatByChatId error %w", err)
 	}
@@ -143,12 +145,12 @@ func (r *ChatRepository) UpdateChat(ctx context.Context, chat *Chat) error {
 	filter := bson.M{"chatId": chat.ChatID}
 	update := bson.M{"$set": bson.M{"reply_probability": chat.ReplyProbability}}
 
-	_, err := r.c.UpdateOne(ctx, filter, update)
+	_, err := r.cCol.UpdateOne(ctx, filter, update)
 	return err
 }
 
 func (r *ChatRepository) FindAllChats(ctx context.Context) ([]Chat, error) {
-	cursor, err := r.c.Find(ctx, bson.M{})
+	cursor, err := r.cCol.Find(ctx, bson.M{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to find chats: %w", err)
 	}

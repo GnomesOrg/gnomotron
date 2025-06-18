@@ -16,10 +16,10 @@ import (
 const RemindCollection = "remind"
 
 type RemindRepository struct {
-	collection *mongo.Collection
-	l          *slog.Logger
-	rMap       map[primitive.ObjectID]cron.EntryID
-	crS        []cron.EntryID
+	c    *mongo.Collection
+	l    *slog.Logger
+	rMap map[primitive.ObjectID]cron.EntryID
+	crS  []cron.EntryID
 }
 
 type Remind struct {
@@ -33,17 +33,17 @@ func NewRemind(c string, m string, chatId int64) *Remind {
 	return &Remind{primitive.NewObjectID(), c, m, chatId}
 }
 
-func NewRemindRepository(collection *mongo.Collection, l *slog.Logger) *RemindRepository {
+func NewRemindRepository(db *mongo.Database, l *slog.Logger) *RemindRepository {
 	return &RemindRepository{
-		collection: collection,
-		l:          l,
-		rMap:       make(map[primitive.ObjectID]cron.EntryID),
-		crS:        make([]cron.EntryID, 0),
+		c:    db.Collection(RemindCollection),
+		l:    l,
+		rMap: make(map[primitive.ObjectID]cron.EntryID),
+		crS:  make([]cron.EntryID, 0),
 	}
 }
 
 func (rRepo *RemindRepository) AddRemind(ctx context.Context, r Remind) (*mongo.InsertOneResult, error) {
-	rUUID, err := rRepo.collection.InsertOne(ctx, r)
+	rUUID, err := rRepo.c.InsertOne(ctx, r)
 	log.Println(r.Id, r.Message)
 	if err != nil {
 		return nil, err
@@ -54,7 +54,7 @@ func (rRepo *RemindRepository) AddRemind(ctx context.Context, r Remind) (*mongo.
 
 func (rRepo *RemindRepository) GetAllReminders(ctx context.Context) ([]Remind, error) {
 	var reminders []Remind
-	cursor, err := rRepo.collection.Find(ctx, bson.M{})
+	cursor, err := rRepo.c.Find(ctx, bson.M{})
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +129,7 @@ func (rr *RemindRepository) StartReminderScheduler(bot *tgbotapi.BotAPI, ctx con
 func (rr *RemindRepository) DeleteRemind(ctx context.Context, id primitive.ObjectID) error {
 	filter := bson.M{"_id": id}
 
-	result, err := rr.collection.DeleteOne(ctx, filter)
+	result, err := rr.c.DeleteOne(ctx, filter)
 	if err != nil {
 		rr.l.Error("failed to delete reminder", slog.Any("error", err))
 		return err
@@ -140,7 +140,6 @@ func (rr *RemindRepository) DeleteRemind(ctx context.Context, id primitive.Objec
 		return mongo.ErrNoDocuments
 	}
 
-	
 	rr.crS = append(rr.crS, rr.rMap[id])
 	delete(rr.rMap, id)
 
@@ -153,7 +152,7 @@ func (rr *RemindRepository) ListRemindByChat(ctx context.Context, id int64) ([]R
 	filter := bson.M{"chat_id": id}
 
 	var reminders []Remind
-	cursor, err := rr.collection.Find(ctx, filter)
+	cursor, err := rr.c.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
