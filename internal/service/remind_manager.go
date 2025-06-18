@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"log/slog"
+	"sync"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -20,6 +21,7 @@ type RemindRepository struct {
 	l    *slog.Logger
 	rMap map[primitive.ObjectID]cron.EntryID
 	crS  []cron.EntryID
+	mu   sync.Mutex
 }
 
 type Remind struct {
@@ -93,7 +95,10 @@ func (rr *RemindRepository) StartReminderScheduler(bot *tgbotapi.BotAPI, ctx con
 			rr.l.Debug("fetched some reminders", slog.Any("count", len(reminders)))
 
 			for _, reminder := range reminders {
-				if _, exists := rr.rMap[reminder.Id]; exists {
+				rr.mu.Lock()
+				_, exists := rr.rMap[reminder.Id]
+				rr.mu.Unlock()
+				if exists {
 					continue
 				}
 
@@ -108,16 +113,20 @@ func (rr *RemindRepository) StartReminderScheduler(bot *tgbotapi.BotAPI, ctx con
 				if err != nil {
 					rr.l.Error("failed to schedule reminder", slog.Any("error", err))
 				} else {
+					rr.mu.Lock()
 					rr.rMap[reminder.Id] = crId
-					rr.l.Debug("reminder added", slog.Any("id", reminder.Id))
+					rr.mu.Unlock()
+					rr.l.Debug("reminder added", slog.Any("id", reminder.Id))	
 				}
 			}
 
+			rr.mu.Lock()
 			for _, ci := range rr.crS {
 				c.Remove(ci)
 				rr.l.Debug("one of crones was removed", slog.Any("id", ci))
 			}
 			rr.crS = []cron.EntryID{}
+			rr.mu.Unlock()
 
 			time.Sleep(30 * time.Second)
 		}
@@ -140,8 +149,10 @@ func (rr *RemindRepository) DeleteRemind(ctx context.Context, id primitive.Objec
 		return mongo.ErrNoDocuments
 	}
 
+	rr.mu.Lock()
 	rr.crS = append(rr.crS, rr.rMap[id])
 	delete(rr.rMap, id)
+	rr.mu.Unlock()
 
 	rr.l.Debug("reminder successfully deleted from map and database", slog.Any("id", id))
 
