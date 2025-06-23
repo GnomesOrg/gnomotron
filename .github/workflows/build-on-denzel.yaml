@@ -2,7 +2,7 @@ name: Deploy
 on:
   push:
     branches:
-      - master
+      - denzel
 
 jobs:
   build-push:
@@ -41,7 +41,7 @@ jobs:
 
   deploy:
     name: pull and run the app
-    runs-on: self-hosted
+    runs-on: denzel-runner
     needs:
       - build-push
 
