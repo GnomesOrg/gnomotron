@@ -196,7 +196,11 @@ func (h *Handler) HandleImage(ctx context.Context, u *tgbotapi.Update) error {
 			"Удали.",
 			"ПХАХПАХпхпхаПА",
 			"🤓",
-			"Я обожаю сиськи",
+			"Я обожаю вас, ребята",
+			"Ты здесь не прав",
+			"смешно XDD",
+			"не смешно.",
+			"o_O",
 		}
 		randomIndex := rand.Intn(len(responses))
 		resp := tgbotapi.NewMessage(u.Message.Chat.ID, responses[randomIndex])
