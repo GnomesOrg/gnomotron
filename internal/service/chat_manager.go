@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"flabergnomebot/internal/config"
-	"fmt"
 	"log/slog"
 
 	"go.mongodb.org/mongo-driver/bson"
