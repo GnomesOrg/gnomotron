@@ -11,7 +11,7 @@ services:
       - "8080:8080"
       - "8055:8055"
     environment:
-      STT_HOST: "${STT_HOST}"
+      STT_URI: "${STT_URI}"
       GNOMOTRON_TELEGRAM_TOKEN: "${GNOMOTRON_TELEGRAM_TOKEN}"
       GPT_API_KEY: "${GPT_API_KEY}"
       GNOMOTRON_MONGO_URI: "${GNOMOTRON_MONGO_URI}"
