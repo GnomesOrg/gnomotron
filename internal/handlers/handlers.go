@@ -600,7 +600,7 @@ func (h *Handler) HandleVoice(ctx context.Context, u *tgbotapi.Update) error {
 	h.l.Debug("stt response: ", slog.String("sttResponse", sttResp.Text))
 
 	repl, err := h.cRepo.FindMessageByTelegramId(ctx, u.Message.MessageID)
-	if err != nil && err != mongo.ErrNoDocuments {
+	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
 		return err
 	}
 
