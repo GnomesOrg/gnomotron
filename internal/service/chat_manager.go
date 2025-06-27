@@ -28,6 +28,7 @@ type Chat struct {
 	ChatID           int64              `bson:"chatId"`
 	Name             string             `bson:"name"`
 	ReplyProbability float32            `bson:"reply_probability"`
+	Banwords		 []string           `bson:"banwords,omitempty"`
 }
 
 func NewMessage(tId int, body string, chatId int64, replies []Message, uname string) *Message {
@@ -55,6 +56,25 @@ type ChatRepository struct {
 	mCol *mongo.Collection
 	l    *slog.Logger
 	cfg  *config.Config
+}
+
+func (r *ChatRepository) GetBanwordsByChatId(ctx context.Context, chatId int64) ([]string, error) {
+		f := bson.D{{Key: "chatId", Value: chatId}}
+
+	cur, err := r.cCol.Find(ctx, f)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	var c Chat
+	for cur.Next(ctx) {
+		if curErr := cur.Decode(&c); curErr != nil {
+			return nil, err
+		}
+	}
+
+	return c.Banwords, nil
 }
 
 // Single responsibility has been violated. It's over...

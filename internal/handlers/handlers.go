@@ -89,6 +89,13 @@ func (h *Handler) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) error 
 	case "lp@" + h.cfg.BOT_NAME:
 		err = h.HandleListConfig(ctx, upd)
 	default:
+		if banned, err := h.HandleBanword(ctx, upd); err != nil {
+			h.l.Error("error in HandleBanword", slog.Any("err", err))
+			break
+		} else if banned != nil && *banned {
+			break
+		}
+
 		if upd.Message.ReplyToMessage != nil && upd.Message.ReplyToMessage.From.UserName == h.cfg.BOT_NAME {
 			// handle only replies of gnomotron messages
 
@@ -313,6 +320,36 @@ func (h *Handler) HandleAskFlaber(ctx context.Context, u *tgbotapi.Update) error
 	h.cRepo.AddMessage(ctx, *newBotTgM)
 
 	return nil
+}
+
+func (h *Handler) HandleBanword(ctx context.Context, u *tgbotapi.Update) (*bool, error) {
+	res := false
+
+	if u.Message.ViaBot == nil {
+		return &res, nil
+	}
+
+	words, err := h.cRepo.GetBanwordsByChatId(ctx, u.FromChat().ID)
+	if err != nil {
+		h.l.Error("cannot get banwords by chat id", slog.Int64("chatId", u.FromChat().ID), slog.Any("err", err))
+		return nil, fmt.Errorf("cannot get banwords: %w", err)
+	}
+
+	for _, word := range words {
+		if strings.Contains(u.Message.Text, word) {
+			delMsg := tgbotapi.NewDeleteMessage(u.Message.Chat.ID, u.Message.MessageID)
+			
+			_, err := h.bot.Request(delMsg)
+			if err != nil {
+				h.l.Error("failed to delete message", slog.Any("err", err))
+				return nil, fmt.Errorf("failed to delete message: %w", err)
+			}
+			res = true
+			return &res, nil
+		}
+	}
+
+	return &res, nil
 }
 
 func (h *Handler) HandleReply(ctx context.Context, u *tgbotapi.Update) error {
