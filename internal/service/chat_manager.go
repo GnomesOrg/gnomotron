@@ -70,7 +70,7 @@ func NewChatRepository(db *mongo.Database, l *slog.Logger, cfg *config.Config) *
 func (r *ChatRepository) FindMessageByTelegramId(ctx context.Context, tId int) (*Message, error) {
 	f := bson.D{{Key: "telegram_id", Value: tId}}
 
-	cur, err := r.cCol.Find(ctx, f)
+	cur, err := r.mCol.Find(ctx, f)
 	if err != nil {
 		return nil, err
 	}
