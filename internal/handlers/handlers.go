@@ -335,10 +335,6 @@ func (h *Handler) HandleAskFlaber(ctx context.Context, u *tgbotapi.Update) error
 }
 
 func (h *Handler) HandleBanword(ctx context.Context, u *tgbotapi.Update) (bool, error) {
-	if u.Message.ViaBot == nil {
-		return false, nil
-	}
-
 	words, err := h.cRepo.GetBanwordsByChatId(ctx, u.FromChat().ID)
 	if err != nil {
 		h.l.Error("cannot get banwords by chat id", slog.Int64("chatId", u.FromChat().ID), slog.Any("err", err))
