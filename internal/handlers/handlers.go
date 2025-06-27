@@ -63,13 +63,20 @@ func New(
 }
 
 func (h *Handler) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) error {
+	viaBotName := ""
+	if upd.Message.ViaBot != nil {
+		viaBotName = upd.Message.ViaBot.UserName
+	}
+
 	h.l.Info(
 		"new message",
 		slog.Int64("chat id", upd.Message.Chat.ID),
 		slog.Int("message id", upd.Message.MessageID),
 		slog.String("username", upd.Message.From.UserName),
 		slog.String("body", upd.Message.Text),
+		slog.String("via bot", viaBotName),
 	)
+
 	var err error
 	switch upd.Message.CommandWithAt() {
 	case "start@" + h.cfg.BOT_NAME:
@@ -90,9 +97,14 @@ func (h *Handler) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) error 
 		err = h.HandleListConfig(ctx, upd)
 	default:
 		if banned, err := h.HandleBanword(ctx, upd); err != nil {
-			h.l.Error("error in HandleBanword", slog.Any("err", err))
 			break
-		} else if banned != nil && *banned {
+		} else if banned {
+			break
+		}
+
+		if banned, err := h.HandleBlacklist(ctx, upd); err != nil {
+			break
+		} else if banned {
 			break
 		}
 
@@ -322,17 +334,15 @@ func (h *Handler) HandleAskFlaber(ctx context.Context, u *tgbotapi.Update) error
 	return nil
 }
 
-func (h *Handler) HandleBanword(ctx context.Context, u *tgbotapi.Update) (*bool, error) {
-	res := false
-
+func (h *Handler) HandleBanword(ctx context.Context, u *tgbotapi.Update) (bool, error) {
 	if u.Message.ViaBot == nil {
-		return &res, nil
+		return false, nil
 	}
 
 	words, err := h.cRepo.GetBanwordsByChatId(ctx, u.FromChat().ID)
 	if err != nil {
 		h.l.Error("cannot get banwords by chat id", slog.Int64("chatId", u.FromChat().ID), slog.Any("err", err))
-		return nil, fmt.Errorf("cannot get banwords: %w", err)
+		return false, fmt.Errorf("cannot get banwords: %w", err)
 	}
 
 	for _, word := range words {
@@ -342,14 +352,34 @@ func (h *Handler) HandleBanword(ctx context.Context, u *tgbotapi.Update) (*bool,
 			_, err := h.bot.Request(delMsg)
 			if err != nil {
 				h.l.Error("failed to delete message", slog.Any("err", err))
-				return nil, fmt.Errorf("failed to delete message: %w", err)
+				return false, fmt.Errorf("failed to delete message: %w", err)
 			}
-			res = true
-			return &res, nil
+
+			return true, nil
 		}
 	}
 
-	return &res, nil
+	return false, nil
+}
+
+func (h *Handler) HandleBlacklist(ctx context.Context, u *tgbotapi.Update) (bool, error) {
+	if u.Message.ViaBot == nil {
+		return false, nil
+	}
+
+	if u.Message.ViaBot.UserName == "DickGrowerBot" {
+		delMsg := tgbotapi.NewDeleteMessage(u.Message.Chat.ID, u.Message.MessageID)
+
+		_, err := h.bot.Request(delMsg)
+		if err != nil {
+			h.l.Error("failed to delete message", slog.Any("err", err))
+			return false, fmt.Errorf("failed to delete message: %w", err)
+		}
+
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func (h *Handler) HandleReply(ctx context.Context, u *tgbotapi.Update) error {
