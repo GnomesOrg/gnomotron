@@ -59,7 +59,7 @@ type ChatRepository struct {
 }
 
 func (r *ChatRepository) GetBanwordsByChatId(ctx context.Context, chatId int64) ([]string, error) {
-		f := bson.D{{Key: "chatId", Value: chatId}}
+	f := bson.D{{Key: "chatId", Value: chatId}}
 
 	cur, err := r.cCol.Find(ctx, f)
 	if err != nil {
@@ -188,3 +188,36 @@ func (r *ChatRepository) FindAllChats(ctx context.Context) ([]Chat, error) {
 
 	return chats, nil
 }
+
+func (r *ChatRepository) AddBanwordsToChat(ctx context.Context, cId int64, bw []string) error {
+	filter := bson.M{"chatId": cId}
+	update := bson.M{"$addToSet": bson.M{"banwords": bson.M{"$each": bw}}}
+
+	_, err := r.cCol.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *ChatRepository) RemoveBanwordsFromChat(ctx context.Context, cId int64, bw []string) error {
+	filter := bson.M{"chatId": cId}
+	update := bson.M{"$pull": bson.M{"banwords": bson.M{"$in": bw}}}
+
+	_, err := r.cCol.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *ChatRepository) AddBlacklistedBot(ctx context.Context, chatId int64, botUsername string) error {
+	filter := bson.M{"chatId": chatId}
+	update := bson.M{"$addToSet": bson.M{"blacklisted_bots": botUsername}}
+
+	_, err := r.cCol.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *ChatRepository) RemoveBlacklistedBot(ctx context.Context, chatId int64, botUsername string) error {
+	filter := bson.M{"chatId": chatId}
+	update := bson.M{"$pull": bson.M{"blacklisted_bots": botUsername}}
+
+	_, err := r.cCol.UpdateOne(ctx, filter, update)
+	return err
+}
+

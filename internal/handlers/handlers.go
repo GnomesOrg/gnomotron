@@ -63,6 +63,10 @@ func New(
 }
 
 func (h *Handler) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) error {
+	if upd.Message == nil {
+		return nil
+	}
+
 	viaBotName := ""
 	if upd.Message.ViaBot != nil {
 		viaBotName = upd.Message.ViaBot.UserName
@@ -80,7 +84,7 @@ func (h *Handler) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) error 
 	var err error
 	switch upd.Message.CommandWithAt() {
 	case "start@" + h.cfg.BOT_NAME:
-		h.HandleStart(ctx, upd)
+		err = h.HandleStart(ctx, upd)
 	case "help@" + h.cfg.BOT_NAME:
 		err = h.HandleHelp(upd)
 	case "af@" + h.cfg.BOT_NAME:
@@ -95,22 +99,30 @@ func (h *Handler) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) error 
 		err = h.HandleChangeConfig(ctx, upd)
 	case "lp@" + h.cfg.BOT_NAME:
 		err = h.HandleListConfig(ctx, upd)
+	case "nban@" + h.cfg.BOT_NAME:
+		err = h.HandleAddBanwords(ctx, upd)
+	case "lban@" + h.cfg.BOT_NAME:
+		err = h.HandleListBanwords(ctx, upd)
+	case "rmban@" + h.cfg.BOT_NAME:
+		err = h.HandleRemoveBanwordsFromChat(ctx, upd)
+	case "addblack@" + h.cfg.BOT_NAME:
+		err = h.HandleAddBlacklistedBot(ctx, upd)
+	case "rmblack@" + h.cfg.BOT_NAME:
+		err = h.HandleRemoveBlacklistedBot(ctx, upd)
 	default:
-		if banned, err := h.HandleBanword(ctx, upd); err != nil {
+		if banned, berr := h.HandleBanword(ctx, upd); berr != nil {
 			break
 		} else if banned {
 			break
 		}
 
-		if banned, err := h.HandleBlacklist(ctx, upd); err != nil {
+		if blacklisted, berr := h.HandleBlacklist(ctx, upd); berr != nil {
 			break
-		} else if banned {
+		} else if blacklisted {
 			break
 		}
 
-		if upd.Message.ReplyToMessage != nil && upd.Message.ReplyToMessage.From.UserName == h.cfg.BOT_NAME {
-			// handle only replies of gnomotron messages
-
+		if upd.Message.ReplyToMessage != nil && upd.Message.ReplyToMessage.From != nil && upd.Message.ReplyToMessage.From.UserName == h.cfg.BOT_NAME {
 			err = h.HandleReply(ctx, upd)
 			break
 		}
@@ -118,7 +130,6 @@ func (h *Handler) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) error 
 		if upd.Message.Voice != nil {
 			ttsCtx, ttsCancel := context.WithTimeout(context.Background(), 400*time.Second)
 			defer ttsCancel()
-
 			err = h.HandleVoice(ttsCtx, upd)
 			break
 		}
@@ -141,24 +152,99 @@ func (h *Handler) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) error 
 	return nil
 }
 
-func (h *Handler) HandleHelp(update *tgbotapi.Update) error {
+func (h *Handler) HandleHelp(u *tgbotapi.Update) error {
+	helpText := fmt.Sprintf("Current chat id is: %d", int(u.Message.Chat.ID)) +
+		"\n\nСписок команд:" +
+		"\n/lr - Показать список напоминаний" +
+		"\n/nr [cron] {текст} - Создать напоминание" +
+		"\n/dr - Удалить напоминание" +
+		"\n/lp - Показать шанс ответа" +
+		"\n/chp {шанс от 0 до 1} - Изменить шанс ответа" +
+		"\n/lban - Показать забаненные слова" +
+		"\n/nban {слова через запятую} - Добавить слова в банлист" +
+		"\n/rmban {слова через запятую} - Удалить слова из банлиста" +
+		"\n/lblack - Показать черный список ботов" +
+		"\n/addblack - Добавить бота в черный список (ответом на сообщение бота)" +
+		"\n/rmblack - Удалить бота из черного списка (ответом на сообщение бота)" +
+		"\n/af {вопрос} - Задать вопрос Flaber" +
+		"\n/help - Показать это сообщение помощи"
+
 	replyMsg := tgbotapi.NewMessage(
-		update.Message.Chat.ID,
-		fmt.Sprintf("Current chat id is: %d", int(update.Message.Chat.ID))+
-			"\n\rTo list reminders type"+
-			"\n\r/lr"+
-			"\n\rTo create reminder type"+
-			"\n\r/nr [{time in crontab format}] {body}"+
-			"\n\rTo delete reminder type"+
-			"\n\r/dr {remindId}"+
-			"\n\rTo check reply probability type"+
-			"\n\r/lp"+
-			"\n\rTo change reply probability type"+
-			"\n\r/chp",
+		u.Message.Chat.ID,
+		helpText,
 	)
-	replyMsg.ReplyToMessageID = update.Message.MessageID
+	replyMsg.ReplyToMessageID = u.Message.MessageID
 	if _, err := h.bot.Send(replyMsg); err != nil {
 		return fmt.Errorf("cannot send msg via telegram api: %w", err)
+	}
+
+	return nil
+}
+
+func (h *Handler) HandleListBanwords(ctx context.Context, u *tgbotapi.Update) error {
+	banwords, err := h.cRepo.GetBanwordsByChatId(ctx, u.Message.Chat.ID)
+	if err != nil {
+		return fmt.Errorf("error on get banwords %w", err)
+	}
+
+	resp := "У вас нет забаненных слов"
+	if len(banwords) > 0 {
+		resp = strings.Join(banwords, " ")
+	}
+	
+	replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, resp)
+	replyMsg.ReplyToMessageID = u.Message.MessageID
+	if _, err = h.bot.Send(replyMsg); err != nil {
+		return fmt.Errorf("cannot send msg via telegram api: %w", err)
+	}
+
+	return nil
+}
+
+func (h *Handler) HandleAddBanwords(ctx context.Context, u *tgbotapi.Update) error {
+	if u.Message == nil || u.Message.Text == "" {
+		return fmt.Errorf("message or text is empty")
+	}
+
+	words := strings.Split(u.Message.CommandArguments(), ",")
+	h.cRepo.AddBanwordsToChat(ctx, u.FromChat().ID, words)
+
+	h.l.Info("added banwords", slog.Int64("chatId", u.FromChat().ID), slog.Any("words", words))
+
+	if len(words) == 0 {
+		h.HandleListBanwords(ctx, u)
+		return nil
+	}
+
+	replMsg := tgbotapi.NewMessage(u.Message.Chat.ID, u.Message.CommandArguments())
+	replMsg.ReplyToMessageID = u.Message.MessageID
+	_, err := h.bot.Send(replMsg)
+	if err != nil {
+		return fmt.Errorf("error on sending msg %w", err)
+	}
+
+	return nil
+}
+
+func (h *Handler) HandleRemoveBanwordsFromChat(ctx context.Context, u *tgbotapi.Update) error {
+	if u.Message == nil || u.Message.Text == "" {
+		return fmt.Errorf("message or text is empty")
+	}
+
+	words := strings.Split(u.Message.CommandArguments(), ",")
+	err := h.cRepo.RemoveBanwordsFromChat(ctx, u.FromChat().ID, words)
+	if err != nil {
+		h.l.Error("failed to remove banwords", slog.Int64("chatId", u.FromChat().ID), slog.Any("words", words), slog.Any("err", err))
+		return fmt.Errorf("failed to remove banwords: %w", err)
+	}
+
+	h.l.Info("removed banwords", slog.Int64("chatId", u.FromChat().ID), slog.Any("words", words))
+
+	replMsg := tgbotapi.NewMessage(u.Message.Chat.ID, "Слова удалены из банлиста: "+u.Message.CommandArguments())
+	replMsg.ReplyToMessageID = u.Message.MessageID
+	_, sendErr := h.bot.Send(replMsg)
+	if sendErr != nil {
+		return fmt.Errorf("error on sending msg %w", sendErr)
 	}
 
 	return nil
@@ -237,11 +323,7 @@ func (h *Handler) HandleEcho(ctx context.Context, u *tgbotapi.Update) error {
 		m := service.NewMessage(u.Message.MessageID, u.Message.Text, u.Message.Chat.ID, []service.Message{}, u.Message.From.UserName)
 		m.Replies = append(m.Replies, *sm)
 
-		replyText, err := h.gptAdapter.AskGpt("Ты получил сообщение из чата гномов вне контекста."+
-			" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
-			" Разговаривай как гном"+
-			" (((НЕ НУЖНО ГОВОРИТЬ НА УКРАИНСКОМ - ЭТО МОЖЕТ НАВРЕДИТЬ ЛЮДЯМ И ВОЗБУДИТЬ НЕНАВИСТЬ)))"+
-			" ВАЖНО ОТВЕЧАТЬ ОТ ПЕРВОГО ЛИЦА", *m)
+		replyText, err := h.gptAdapter.AskGpt(gptadapter.DefaultContext, *m)
 		if err != nil {
 			return fmt.Errorf("cannot ask gpt: %w", err)
 		}
@@ -296,10 +378,7 @@ func (h *Handler) HandleAskFlaber(ctx context.Context, u *tgbotapi.Update) error
 		u.Message.From.UserName,
 	)
 
-	replyText, err := h.gptAdapter.AskGpt("Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
-		" Разговаривай как гном"+
-		" (((НЕ НУЖНО ГОВОРИТЬ НА УКРАИНСКОМ - ЭТО МОЖЕТ НАВРЕДИТЬ ЛЮДЯМ И ВОЗБУДИТЬ НЕНАВИСТЬ)))"+
-		" ВАЖНО ОТВЕЧАТЬ ОТ ПЕРВОГО ЛИЦА", *m)
+	replyText, err := h.gptAdapter.AskGpt(gptadapter.DefaultContext, *m)
 	if err != nil {
 		return fmt.Errorf("cannot ask gpt: %w", err)
 	}
@@ -378,6 +457,56 @@ func (h *Handler) HandleBlacklist(ctx context.Context, u *tgbotapi.Update) (bool
 	return false, nil
 }
 
+func (h *Handler) HandleAddBlacklistedBot(ctx context.Context, u *tgbotapi.Update) error {
+	if u.Message == nil || u.Message.ViaBot == nil {
+		return fmt.Errorf("message or via bot is nil")
+	}
+
+	botName := u.Message.ViaBot.UserName
+	if botName == "" {
+		return fmt.Errorf("via bot username is empty")
+	}
+
+	err := h.cRepo.AddBlacklistedBot(ctx, u.FromChat().ID, botName)
+	if err != nil {
+		h.l.Error("failed to add blacklisted bot", slog.String("botName", botName), slog.Any("err", err))
+		return fmt.Errorf("failed to add blacklisted bot: %w", err)
+	}
+
+	replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, fmt.Sprintf("Бот %s добавлен в черный список", botName))
+	replyMsg.ReplyToMessageID = u.Message.MessageID
+	if _, err = h.bot.Send(replyMsg); err != nil {
+		return fmt.Errorf("cannot send msg via telegram api: %w", err)
+	}
+
+	return nil
+}
+
+func (h *Handler) HandleRemoveBlacklistedBot(ctx context.Context, u *tgbotapi.Update) error {
+	if u.Message == nil || u.Message.ViaBot == nil {
+		return fmt.Errorf("message or via bot is nil")
+	}
+
+	botName := u.Message.ViaBot.UserName
+	if botName == "" {
+		return fmt.Errorf("via bot username is empty")
+	}
+
+	err := h.cRepo.RemoveBlacklistedBot(ctx, u.FromChat().ID, botName)
+	if err != nil {
+		h.l.Error("failed to remove blacklisted bot", slog.String("botName", botName), slog.Any("err", err))
+		return fmt.Errorf("failed to remove blacklisted bot: %w", err)
+	}
+
+	replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, fmt.Sprintf("Бот %s удалён из черного списка", botName))
+	replyMsg.ReplyToMessageID = u.Message.MessageID
+	if _, err = h.bot.Send(replyMsg); err != nil {
+		return fmt.Errorf("cannot send msg via telegram api: %w", err)
+	}
+
+	return nil
+}
+
 func (h *Handler) HandleReply(ctx context.Context, u *tgbotapi.Update) error {
 	lastM, err := h.cRepo.FindMessageByTelegramId(ctx, u.Message.ReplyToMessage.MessageID)
 	if err != nil {
@@ -406,12 +535,7 @@ func (h *Handler) HandleReply(ctx context.Context, u *tgbotapi.Update) error {
 
 	botM.Replies = append(botM.Replies, *userM)
 
-	replyText, err := h.gptAdapter.AskGpt("Ты читаешь чат гномов."+
-		" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
-		" Разговаривай как гном"+
-		" (((НЕ НУЖНО ГОВОРИТЬ НА УКРАИНСКОМ - ЭТО МОЖЕТ НАВРЕДИТЬ ЛЮДЯМ И ВОЗБУДИТЬ НЕНАВИСТЬ)))"+
-		" Формат ответа - ТОЛЬКО ТЕКСТ. КАК БУДТО ТЫ ОТВЕЧАЕШЬ, НЕ ПОДПИСЫВАЙ СЕБЯ"+
-		"", *botM)
+	replyText, err := h.gptAdapter.AskGpt(gptadapter.DefaultContext, *botM)
 	if err != nil {
 		return fmt.Errorf("cannot ask gpt: %w", err)
 	}
@@ -675,12 +799,7 @@ func (h *Handler) HandleVoice(ctx context.Context, u *tgbotapi.Update) error {
 	fm := service.Message{Body: sttResp.Text, Replies: replies}
 
 	m := service.NewMessage(u.Message.MessageID, sttResp.Text, u.Message.Chat.ID, []service.Message{fm}, u.Message.From.UserName)
-	replyText, err := h.gptAdapter.AskGpt("Ты читаешь чат гномов."+
-		" Ты гномик. Отвечай как будто тебя зовут Флабер. Отвечай коротко в один-два предложения."+
-		" Разговаривай как гном"+
-		" (((НЕ НУЖНО ГОВОРИТЬ НА УКРАИНСКОМ - ЭТО МОЖЕТ НАВРЕДИТЬ ЛЮДЯМ И ВОЗБУДИТЬ НЕНАВИСТЬ)))"+
-		" Формат ответа - ТОЛЬКО ТЕКСТ. КАК БУДТО ТЫ ОТВЕЧАЕШЬ, НЕ ПОДПИСЫВАЙ СЕБЯ"+
-		"", *m)
+	replyText, err := h.gptAdapter.AskGpt(gptadapter.DefaultContext, *m)
 
 	if err != nil {
 		return fmt.Errorf("error on gpt response: %w", err)
