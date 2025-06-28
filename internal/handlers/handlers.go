@@ -109,6 +109,7 @@ func (h *Handler) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) error 
 		err = h.HandleAddBlacklistedBot(ctx, upd)
 	case "rmblack@" + h.cfg.BOT_NAME:
 		err = h.HandleRemoveBlacklistedBot(ctx, upd)
+	case "lblack@" + h.cfg.BOT_NAME:
 	default:
 		if banned, berr := h.HandleBanword(ctx, upd); berr != nil {
 			break
@@ -442,7 +443,13 @@ func (h *Handler) HandleBlacklist(ctx context.Context, u *tgbotapi.Update) (bool
 		return false, nil
 	}
 
-	if u.Message.ViaBot.UserName == "DickGrowerBot" {
+	blacklistedBots, err := h.cRepo.GetBlacklistedBots(ctx, u.FromChat().ID)
+	if err != nil {
+		h.l.Error("cannot get blacklisted bots", slog.Int64("chatId", u.FromChat().ID), slog.Any("err", err))
+		return false, fmt.Errorf("cannot get blacklisted bots: %w", err)
+	}
+	for _, bot := range blacklistedBots {
+		if u.Message.ViaBot.UserName == bot {
 		delMsg := tgbotapi.NewDeleteMessage(u.Message.Chat.ID, u.Message.MessageID)
 
 		_, err := h.bot.Request(delMsg)
@@ -452,6 +459,7 @@ func (h *Handler) HandleBlacklist(ctx context.Context, u *tgbotapi.Update) (bool
 		}
 
 		return true, nil
+		}
 	}
 
 	return false, nil

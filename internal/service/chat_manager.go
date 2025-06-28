@@ -28,7 +28,8 @@ type Chat struct {
 	ChatID           int64              `bson:"chatId"`
 	Name             string             `bson:"name"`
 	ReplyProbability float32            `bson:"reply_probability"`
-	Banwords		 []string           `bson:"banwords,omitempty"`
+	Banwords         []string           `bson:"banwords,omitempty"`
+	BanBots          []string           `bson:"blacklisted_bots,omitempty"`
 }
 
 func NewMessage(tId int, body string, chatId int64, replies []Message, uname string) *Message {
@@ -56,6 +57,18 @@ type ChatRepository struct {
 	mCol *mongo.Collection
 	l    *slog.Logger
 	cfg  *config.Config
+}
+
+func (r *ChatRepository) GetBlacklistedBots(ctx context.Context, chatId int64) ([]string, error) {
+	filter := bson.D{{Key: "chatId", Value: chatId}}
+
+	var chat Chat
+	err := r.cCol.FindOne(ctx, filter).Decode(&chat)
+	if err != nil {
+		return nil, err
+	}
+
+	return chat.BanBots, nil
 }
 
 func (r *ChatRepository) GetBanwordsByChatId(ctx context.Context, chatId int64) ([]string, error) {
@@ -146,7 +159,6 @@ func (r *ChatRepository) AddChat(ctx context.Context, c Chat) error {
 	return nil
 }
 
-
 func (r *ChatRepository) FindChatByChatId(ctx context.Context, chatId int64) (*Chat, error) {
 	f := bson.D{{Key: "chatId", Value: chatId}}
 
@@ -220,4 +232,3 @@ func (r *ChatRepository) RemoveBlacklistedBot(ctx context.Context, chatId int64,
 	_, err := r.cCol.UpdateOne(ctx, filter, update)
 	return err
 }
-
