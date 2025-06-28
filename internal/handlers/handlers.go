@@ -112,14 +112,18 @@ func (h *Handler) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) error 
 	case "lblack@" + h.cfg.BOT_NAME:
 		err = h.HandleListBlacklistedBots(ctx, upd)
 	default:
+		if upd.Message.Dice != nil && upd.Message.Dice.Emoji == "🎰" {
+			err = h.handleCasinoEmoji(upd)
+		}
+
 		if banned, berr := h.HandleBanword(ctx, upd); berr != nil {
-			break
+			return berr
 		} else if banned {
 			break
 		}
 
 		if blacklisted, berr := h.HandleBlacklist(ctx, upd); berr != nil {
-			break
+			return berr
 		} else if blacklisted {
 			break
 		}
@@ -153,6 +157,31 @@ func (h *Handler) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) error 
 
 	return nil
 }
+
+func (h *Handler) handleCasinoEmoji(u *tgbotapi.Update) error {
+	if u.Message.Dice != nil && u.Message.Dice.Emoji == "🎰" {
+		value := u.Message.Dice.Value // max 64
+
+		var reply string
+		switch {
+		case value == 64:
+			reply = "Поздравляю, ты выиграл! 💰"
+		case rand.Float32() < 0.3:
+			reply = "В следующий раз повезёт!"
+		}
+
+		if reply != "" {
+			msg := tgbotapi.NewMessage(u.Message.Chat.ID, reply)
+			msg.ReplyToMessageID = u.Message.MessageID
+			_, err := h.bot.Send(msg)
+			if err != nil {
+				return fmt.Errorf("cannot send casino reply: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
 
 func (h *Handler) HandleListBlacklistedBots(ctx context.Context, u *tgbotapi.Update) error {
     blacklistedBots, err := h.cRepo.GetBlacklistedBots(ctx, u.Message.Chat.ID)
