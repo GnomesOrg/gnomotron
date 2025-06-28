@@ -110,6 +110,7 @@ func (h *Handler) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) error 
 	case "rmblack@" + h.cfg.BOT_NAME:
 		err = h.HandleRemoveBlacklistedBot(ctx, upd)
 	case "lblack@" + h.cfg.BOT_NAME:
+		err = h.HandleListBlacklistedBots(ctx, upd)
 	default:
 		if banned, berr := h.HandleBanword(ctx, upd); berr != nil {
 			break
@@ -151,6 +152,25 @@ func (h *Handler) HandleUpdate(ctx context.Context, upd *tgbotapi.Update) error 
 	}
 
 	return nil
+}
+
+func (h *Handler) HandleListBlacklistedBots(ctx context.Context, u *tgbotapi.Update) error {
+    blacklistedBots, err := h.cRepo.GetBlacklistedBots(ctx, u.Message.Chat.ID)
+    if err != nil {
+        return fmt.Errorf("error on get blacklisted bots %w", err)
+    }
+    
+    resp := "У вас нет ботов в черном списке"
+    if len(blacklistedBots) > 0 {
+        resp = "Боты в черном списке:\n" + strings.Join(blacklistedBots, "\n")
+    }
+   
+    replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, resp)
+    replyMsg.ReplyToMessageID = u.Message.MessageID
+    if _, err = h.bot.Send(replyMsg); err != nil {
+        return fmt.Errorf("cannot send msg via telegram api: %w", err)
+    }
+    return nil
 }
 
 func (h *Handler) HandleHelp(u *tgbotapi.Update) error {
