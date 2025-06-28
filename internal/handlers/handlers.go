@@ -470,6 +470,8 @@ func (h *Handler) HandleBanword(ctx context.Context, u *tgbotapi.Update) (bool, 
 		return false, fmt.Errorf("cannot get banwords: %w", err)
 	}
 
+	h.l.Debug("banwords for chat", slog.Int64("chatId", u.FromChat().ID), slog.Any("words", words))
+
 	for _, word := range words {
 		if strings.Contains(strings.ToLower(u.Message.Text), word) {
 			delMsg := tgbotapi.NewDeleteMessage(u.Message.Chat.ID, u.Message.MessageID)
