@@ -725,10 +725,10 @@ func (h *Handler) HandleListConfig(ctx context.Context, u *tgbotapi.Update) erro
 }
 
 func (h *Handler) HandleVoice(ctx context.Context, u *tgbotapi.Update) error {
-	//need to think about different probablities
-	// if rand.Float32() < 0.35 {
-	// 	return nil
-	// }
+	// need to think about different probablities
+	if rand.Float32() < 0.35 {
+		return nil
+	}
 
 	v := u.Message.Voice
 	if v.Duration > 240 {
