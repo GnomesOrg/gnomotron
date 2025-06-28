@@ -257,6 +257,9 @@ func (h *Handler) HandleAddBanwords(ctx context.Context, u *tgbotapi.Update) err
 	}
 
 	words := strings.Split(u.Message.CommandArguments(), ",")
+	for i := range words {
+		words[i] = strings.ToLower(strings.TrimSpace(words[i]))
+	}
 	h.cRepo.AddBanwordsToChat(ctx, u.FromChat().ID, words)
 
 	h.l.Info("added banwords", slog.Int64("chatId", u.FromChat().ID), slog.Any("words", words))
