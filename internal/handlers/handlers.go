@@ -520,10 +520,6 @@ func (h *Handler) HandleBlacklist(ctx context.Context, u *tgbotapi.Update) (bool
 }
 
 func (h *Handler) HandleAddBlacklistedBot(ctx context.Context, u *tgbotapi.Update) error {
-	if u.Message == nil || u.Message.ViaBot == nil {
-		return fmt.Errorf("message or via bot is nil")
-	}
-
 	botName := u.Message.CommandArguments()
 	if botName == "" {
 		return fmt.Errorf("via bot username is empty")
