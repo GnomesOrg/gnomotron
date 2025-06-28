@@ -544,7 +544,7 @@ func (h *Handler) HandleRemoveBlacklistedBot(ctx context.Context, u *tgbotapi.Up
 		return fmt.Errorf("message or via bot is nil")
 	}
 
-	botName := u.Message.ViaBot.UserName
+	botName := u.Message.CommandArguments()
 	if botName == "" {
 		return fmt.Errorf("via bot username is empty")
 	}
