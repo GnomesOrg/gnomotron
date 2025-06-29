@@ -67,7 +67,23 @@ func main() {
 
 	l.Info(fmt.Sprintf("Authorized on account %s", bot.Self.UserName))
 
-	u := tgbotapi.NewUpdate(0)
+	// Очистка старых обновлений, если бот долго не работал
+	oldUpdates, err := bot.GetUpdates(tgbotapi.UpdateConfig{
+		Offset: 0,
+		Limit:  1,
+		Timeout: 0,
+	})
+	if err != nil {
+		l.Error("failed to get latest update", slog.Any("error", err))
+	}
+	var offset int
+	if len(oldUpdates) > 0 {
+		offset = oldUpdates[0].UpdateID + 1
+	} else {
+		offset = 0
+	}
+
+	u := tgbotapi.NewUpdate(offset)
 	u.Timeout = 60
 
 	updates := bot.GetUpdatesChan(u)
