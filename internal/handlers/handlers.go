@@ -15,6 +15,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -164,9 +165,11 @@ func (h *Handler) handleCasinoEmoji(u *tgbotapi.Update) error {
 
 		var reply string
 		switch {
-		case value == 64:
+		case slices.Contains([]int{1, 22, 43, 64}, value):
+			time.Sleep(time.Second * 4)
 			reply = "Поздравляю, ты выиграл! 💰"
 		case rand.Float32() < 0.3:
+			time.Sleep(time.Second * 4)
 			reply = "В следующий раз повезёт!"
 		}
 
@@ -186,7 +189,11 @@ func (h *Handler) handleCasinoEmoji(u *tgbotapi.Update) error {
 func (h *Handler) HandleListBlacklistedBots(ctx context.Context, u *tgbotapi.Update) error {
     blacklistedBots, err := h.cRepo.GetBlacklistedBots(ctx, u.Message.Chat.ID)
     if err != nil {
-        return fmt.Errorf("error on get blacklisted bots %w", err)
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			blacklistedBots = []string{}
+		} else {
+			return fmt.Errorf("error on get blacklisted bots %w", err)
+		}
     }
     
     resp := "У вас нет ботов в черном списке"
@@ -258,7 +265,9 @@ func (h *Handler) HandleAddBanwords(ctx context.Context, u *tgbotapi.Update) err
 
 	words := strings.Split(u.Message.CommandArguments(), ",")
 	for i := range words {
-		words[i] = strings.ToLower(strings.TrimSpace(words[i]))
+		if words[i] != "" {
+			words[i] = strings.ToLower(strings.TrimSpace(words[i]))
+		}
 	}
 	h.cRepo.AddBanwordsToChat(ctx, u.FromChat().ID, words)
 
@@ -285,6 +294,9 @@ func (h *Handler) HandleRemoveBanwordsFromChat(ctx context.Context, u *tgbotapi.
 	}
 
 	words := strings.Split(u.Message.CommandArguments(), ",")
+	for i := range words {
+		words[i] = strings.ToLower(strings.TrimSpace(words[i]))
+	}
 	err := h.cRepo.RemoveBanwordsFromChat(ctx, u.FromChat().ID, words)
 	if err != nil {
 		h.l.Error("failed to remove banwords", slog.Int64("chatId", u.FromChat().ID), slog.Any("words", words), slog.Any("err", err))
