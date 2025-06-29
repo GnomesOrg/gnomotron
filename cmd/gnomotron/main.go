@@ -110,10 +110,7 @@ func main() {
 					err := handler.HandleUpdate(botCtx, &upd)
 					if err != nil {
 						errMsg := fmt.Sprintf("При выполнении произошла ошибка: %+v", err)
-						_, sendErr := bot.Send(tgbotapi.NewMessage(upd.Message.Chat.ID, errMsg))
-						if sendErr != nil {
-							l.Error(fmt.Sprintf("error while sending message: %+v", err))
-						}
+						l.Error(errMsg, slog.Any("error", err))
 					}
 				}
 
