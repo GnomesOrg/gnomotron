@@ -929,6 +929,10 @@ func (h *Handler) shouldReply(ctx context.Context, cID int64) bool {
 		return false
 	}
 
+	if ch == nil {
+		return false
+	}
+
 	h.l.Debug("debug reply probability", slog.Any("replyProbability", ch.ReplyProbability))
 
 	return ch.ReplyProbability > rand.Float32()
