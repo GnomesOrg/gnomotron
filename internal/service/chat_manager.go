@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flabergnomebot/internal/config"
+	"fmt"
 	"log/slog"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -49,6 +50,8 @@ func NewChat(chatId int64, name string) *Chat {
 		ChatID:           chatId,
 		Name:             name,
 		ReplyProbability: 0,
+		Banwords: []string{},
+		BanBots: []string{},
 	}
 }
 
@@ -137,26 +140,28 @@ func (r *ChatRepository) AddMessage(ctx context.Context, m Message) error {
 }
 
 func (r *ChatRepository) AddChat(ctx context.Context, c Chat) error {
-	filter := bson.M{"chatId": c.ChatID}
-	var existingChat Chat
-	err := r.cCol.FindOne(ctx, filter).Decode(&existingChat)
+    filter := bson.M{"chatId": c.ChatID}
+    err := r.cCol.FindOne(ctx, filter).Err()
+    switch {
+    case err == nil:
+        return fmt.Errorf("chat with id %d already exists", c.ChatID)
+    case errors.Is(err, mongo.ErrNoDocuments):
+        // crete chat ONLY if not exists
+    default:
+        r.l.Error("failed to check chat existence", slog.Int64("chatId", c.ChatID), slog.String("error", err.Error()))
+        return fmt.Errorf("failed to check chat existence: %w", err)
+    }
 
-	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
-		return err
-	}
+    if _, err := r.cCol.InsertOne(ctx, c); err != nil {
+        r.l.Error("failed to insert chat", slog.Int64("chatId", c.ChatID), slog.String("error", err.Error()))
+        return fmt.Errorf("failed to insert chat: %w", err)
+    }
 
-	if err == nil {
-		return nil
-	}
-
-	_, err = r.cCol.InsertOne(ctx, c)
-	if err != nil {
-		return err
-	}
-
-	r.l.Debug("new chat registered", slog.String("chat name", c.Name), slog.Int64("chatId", c.ChatID))
-
-	return nil
+    r.l.Info("new chat registered", 
+        slog.String("chatName", c.Name),
+        slog.Int64("chatId", c.ChatID),
+    )
+    return nil
 }
 
 func (r *ChatRepository) FindChatByChatId(ctx context.Context, chatId int64) (*Chat, error) {

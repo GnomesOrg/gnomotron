@@ -351,7 +351,7 @@ func (h *Handler) HandleNewRemind(ctx context.Context, u *tgbotapi.Update) error
 }
 
 func (h *Handler) HandleStart(ctx context.Context, u *tgbotapi.Update) error {
-	replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, "My name is Flaber, hello friend")
+	replyMsg := tgbotapi.NewMessage(u.Message.Chat.ID, "Теперь чат зарегистрирован!")
 	replyMsg.ReplyToMessageID = u.Message.MessageID
 	if _, err := h.bot.Send(replyMsg); err != nil {
 		return fmt.Errorf("cannot send msg via telegram api: %w", err)
@@ -494,7 +494,7 @@ func (h *Handler) HandleBanword(ctx context.Context, u *tgbotapi.Update) (bool, 
 	for _, word := range words {
 		if strings.Contains(strings.ToLower(u.Message.Text), word) {
 			delMsg := tgbotapi.NewDeleteMessage(u.Message.Chat.ID, u.Message.MessageID)
-			
+
 			_, err := h.bot.Request(delMsg)
 			if err != nil {
 				h.l.Error("failed to delete message", slog.Any("err", err))
@@ -557,10 +557,6 @@ func (h *Handler) HandleAddBlacklistedBot(ctx context.Context, u *tgbotapi.Updat
 }
 
 func (h *Handler) HandleRemoveBlacklistedBot(ctx context.Context, u *tgbotapi.Update) error {
-	if u.Message == nil || u.Message.ViaBot == nil {
-		return fmt.Errorf("message or via bot is nil")
-	}
-
 	botName := u.Message.CommandArguments()
 	if botName == "" {
 		return fmt.Errorf("via bot username is empty")
