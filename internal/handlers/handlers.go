@@ -221,8 +221,8 @@ func (h *Handler) HandleHelp(u *tgbotapi.Update) error {
 		"\n/nban {слова через запятую} - Добавить слова в банлист" +
 		"\n/rmban {слова через запятую} - Удалить слова из банлиста" +
 		"\n/lblack - Показать черный список ботов" +
-		"\n/addblack - Добавить бота в черный список (ответом на сообщение бота)" +
-		"\n/rmblack - Удалить бота из черного списка (ответом на сообщение бота)" +
+		"\n/addblack - Добавить бота в черный список" +
+		"\n/rmblack - Удалить бота из черного списка" +
 		"\n/af {вопрос} - Задать вопрос Flaber" +
 		"\n/help - Показать это сообщение помощи"
 
@@ -264,14 +264,18 @@ func (h *Handler) HandleAddBanwords(ctx context.Context, u *tgbotapi.Update) err
 	}
 
 	words := strings.Split(u.Message.CommandArguments(), ",")
-	for i := range words {
-		if words[i] != "" {
-			words[i] = strings.ToLower(strings.TrimSpace(words[i]))
+	i := 0
+	for _, word := range words {
+		if trimmed := strings.TrimSpace(word); trimmed != "" {
+			words[i] = strings.ToLower(trimmed)
+			i++
 		}
 	}
+	words = words[:i]
+
 	h.cRepo.AddBanwordsToChat(ctx, u.FromChat().ID, words)
 
-	h.l.Info("added banwords", slog.Int64("chatId", u.FromChat().ID), slog.Any("words", words))
+	h.l.Debug("added banwords", slog.Int64("chatId", u.FromChat().ID), slog.Any("words", words))
 
 	if len(words) == 0 {
 		h.HandleListBanwords(ctx, u)
