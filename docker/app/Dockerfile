@@ -6,6 +6,10 @@ RUN go mod download
 COPY . .
 RUN go build -o flabergnomebot ./cmd/gnomotron/
 
+# Build stage to copy CA certificates
+FROM scratch
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
 FROM alpine
 WORKDIR /app
 RUN apk add --no-cache tzdata ca-certificates && update-ca-certificates
