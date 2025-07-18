@@ -12,7 +12,7 @@ RUN apk add --no-cache ca-certificates
 FROM alpine
 WORKDIR /app
 
-RUN apk add --no-cache tzdata && update-ca-certificates
+RUN apk add --no-cache tzdata ca-certificates && update-ca-certificates
 ENV TZ="Asia/Yekaterinburg"
 
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
