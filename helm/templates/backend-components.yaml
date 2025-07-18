@@ -1,0 +1,180 @@
+# --- MongoDB PVC ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.volumes.mongo.storage }}
+
+---
+
+# --- MongoDB Deployment ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels:
+        app: mongodb
+    spec:
+      containers:
+        - name: mongodb
+          image: mongo:latest
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Chart.Name }}-secrets
+                  key: MONGO_INITDB_ROOT_USERNAME
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Chart.Name }}-secrets
+                  key: MONGO_INITDB_ROOT_PASSWORD
+            - name: MONGO_INITDB_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Chart.Name }}-secrets
+                  key: MONGO_INITDB_DATABASE
+          volumeMounts:
+            - name: mongo-volume
+              mountPath: /data/db
+      volumes:
+        - name: mongo-volume
+          persistentVolumeClaim:
+            claimName: mongodb-pvc
+
+---
+
+# --- MongoDB Service ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+spec:
+  selector:
+    app: mongodb
+  ports:
+    - port: 27017
+      targetPort: 27017
+
+---
+
+# --- Mongoclient Deployment ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongoclient
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongoclient
+  template:
+    metadata:
+      labels:
+        app: mongoclient
+    spec:
+      containers:
+        - name: mongoclient
+          image: mongoclient/mongoclient:latest
+          env:
+            - name: MONGOCLIENT_DEFAULT_CONNECTION_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Chart.Name }}-secrets
+                  key: GNOMOTRON_MONGO_URI
+          ports:
+            - containerPort: 3000
+
+---
+
+# --- Mongoclient Service ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongoclient
+spec:
+  type: NodePort
+  selector:
+    app: mongoclient
+  ports:
+    - port: 3000
+      targetPort: 3000
+      nodePort: 30081
+
+---
+
+# --- STT PVC ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: stt-cache-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.volumes.whisper.storage }}
+
+---
+
+# --- STT Deployment ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stt
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stt
+  template:
+    metadata:
+      labels:
+        app: stt
+    spec:
+      containers:
+        - name: stt
+          image: stt:latest
+          env:
+            - name: STT_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Chart.Name }}-secrets
+                  key: STT_MODEL
+          ports:
+            - containerPort: 5000
+          volumeMounts:
+            - name: whisper-cache
+              mountPath: /root/.cache/whisper
+      volumes:
+        - name: whisper-cache
+          persistentVolumeClaim:
+            claimName: stt-cache-pvc
+
+---
+
+# --- STT Service ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stt
+spec:
+  type: NodePort
+  selector:
+    app: stt
+  ports:
+    - port: 5000
+      targetPort: 5000
+      nodePort: 30500
