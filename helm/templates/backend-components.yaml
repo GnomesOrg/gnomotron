@@ -144,6 +144,8 @@ spec:
       labels:
         app: stt
     spec:
+      imagePullSecrets:
+        - name: ghcr-creds
       containers:
         - name: stt
           image: stt:latest

@@ -17,6 +17,9 @@ service:
       targetPort: 8055
       nodePort: 30855
 
+imagePullSecrets:
+  - name: ghcr-creds
+
 secrets:
   GNOMOTRON_TELEGRAM_TOKEN: ""
   GPT_API_KEY: ""

@@ -14,6 +14,8 @@ spec:
       labels:
         app: {{ .Chart.Name }}
     spec:
+      imagePullSecrets:
+        - name: ghcr-creds
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -52,3 +54,23 @@ spec:
                 secretKeyRef:
                   name: {{ .Chart.Name }}-secrets
                   key: BOT_NAME
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Chart.Name }}
+  labels:
+    app: {{ .Chart.Name }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: {{ .Chart.Name }}
+  ports:
+    {{- range .Values.service.ports }}
+    - name: {{ .name }}
+      port: {{ .port }}
+      targetPort: {{ .targetPort }}
+      nodePort: {{ .nodePort }}
+    {{- end }}
