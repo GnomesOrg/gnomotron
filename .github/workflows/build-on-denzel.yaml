@@ -1,8 +1,16 @@
-  deploy:
-    name: deploy via helm
-    runs-on: denzel-runner
-    needs:
-      - build-push
+name: Deploy
+
+on:
+  push:
+    branches:
+      - denzel
+
+jobs:
+  build-push:
+    name: build and push docker image
+    runs-on: ubuntu-22.04
+    permissions:     
+     packages: write
 
     steps:
       - uses: actions/checkout@v2
@@ -27,6 +35,33 @@
           username: ${{ env.OWNER_LC }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: build and push the image
+        run: |
+          docker compose build
+          docker compose push
+
+  deploy:
+    name: deploy via helm
+    runs-on: denzel-runner
+    needs:
+      - build-push
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: set lower case owner name
+        env:
+          OWNER: '${{ github.repository_owner }}'
+        run: |
+          export "OWNER_LC=${OWNER,,}"
+          export "IMAGE_NAME=ghcr.io/${OWNER_LC}/gnomotron"
+          export "IMAGE_TAG=${{ github.sha }}"
+          echo "OWNER_LC=${OWNER_LC}" >>${GITHUB_ENV}
+          echo "IMAGE_NAME=${IMAGE_NAME}" >>${GITHUB_ENV}
+          echo "IMAGE_TAG=${IMAGE_TAG}" >>${GITHUB_ENV}
+
       - name: deploy helm chart
         run: |
           helm upgrade --install gnomotron ./helm \
@@ -42,3 +77,5 @@
             --set-string secrets.BOT_NAME=${{ secrets.BOT_NAME }} \
             --set-string secrets.STT_URI=${{ vars.STT_URI }} \
             --set-string secrets.STT_MODEL=${{ vars.STT_MODEL }}
+
+          echo "✅ Deployed gnomotron: ghcr.io/${{ env.OWNER_LC }}/gnomotron:${{ env.IMAGE_TAG }}"
