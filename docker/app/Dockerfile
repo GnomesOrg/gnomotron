@@ -8,6 +8,7 @@ RUN go build -o flabergnomebot ./cmd/gnomotron/
 
 FROM alpine
 WORKDIR /app
+RUN apk add --no-cache tzdata ca-certificates
 RUN apk add --no-cache tzdata
 ENV TZ="Asia/Yekaterinburg"
 COPY --from=gobuild /appbuild/ /app/
