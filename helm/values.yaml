@@ -1,0 +1,39 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/your-user/gnomotron
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: NodePort
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      nodePort: 30880
+    - name: admin
+      port: 8055
+      targetPort: 8055
+      nodePort: 30855
+
+imagePullSecrets:
+  - name: ghcr-creds
+
+secrets:
+  GNOMOTRON_TELEGRAM_TOKEN: ""
+  GPT_API_KEY: ""
+  GNOMOTRON_MONGO_URI: ""
+  GNOMOTRON_MONGO_DB: "gnomotron"
+  STT_URI: "http://stt:5000"
+  BOT_NAME: "GnomotronBot"
+  MONGO_INITDB_ROOT_USERNAME: "mongo"
+  MONGO_INITDB_ROOT_PASSWORD: "mongo"
+  MONGO_INITDB_DATABASE: "gnomotron"
+  STT_MODEL: "base"
+
+volumes:
+  mongo:
+    storage: 5Gi
+  whisper:
+    storage: 3Gi

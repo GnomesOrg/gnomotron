@@ -78,8 +78,11 @@ jobs:
 
       - name: start the container with the new version
         env:
-          STT_HOST: ${{ vars.STT_HOST }}
+          STT_URI: ${{ vars.STT_URI }}
           STT_MODEL: ${{ vars.STT_MODEL }}
+          WHISPER_VOLUME: ${{ vars.WHISPER_VOLUME }}
+          MONGO_VOLUME: ${{ vars.MONGO_VOLUME }}
+          MONGO_PORT: ${{ vars.MONGO_PORT }}
           GPT_API_KEY: ${{ secrets.GPT_API_KEY }}
           GNOMOTRON_MONGO_DB: ${{ secrets.GNOMOTRON_MONGO_DB }}
           MONGO_INITDB_ROOT_USERNAME: ${{ secrets.MONGO_INITDB_ROOT_USERNAME }}

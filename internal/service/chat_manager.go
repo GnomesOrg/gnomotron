@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"flabergnomebot/internal/config"
 	"fmt"
 	"log/slog"
@@ -28,6 +29,8 @@ type Chat struct {
 	ChatID           int64              `bson:"chatId"`
 	Name             string             `bson:"name"`
 	ReplyProbability float32            `bson:"reply_probability"`
+	Banwords         []string           `bson:"banwords,omitempty"`
+	BanBots          []string           `bson:"blacklisted_bots,omitempty"`
 }
 
 func NewMessage(tId int, body string, chatId int64, replies []Message, uname string) *Message {
@@ -47,37 +50,72 @@ func NewChat(chatId int64, name string) *Chat {
 		ChatID:           chatId,
 		Name:             name,
 		ReplyProbability: 0,
+		Banwords: []string{},
+		BanBots: []string{},
 	}
 }
 
 type ChatRepository struct {
-	c   *mongo.Collection
-	l   *slog.Logger
-	cfg *config.Config
+	cCol *mongo.Collection
+	mCol *mongo.Collection
+	l    *slog.Logger
+	cfg  *config.Config
+}
+
+func (r *ChatRepository) GetBlacklistedBots(ctx context.Context, chatId int64) ([]string, error) {
+	filter := bson.D{{Key: "chatId", Value: chatId}}
+
+	var chat Chat
+	err := r.cCol.FindOne(ctx, filter).Decode(&chat)
+	if err != nil {
+		return nil, err
+	}
+
+	return chat.BanBots, nil
+}
+
+func (r *ChatRepository) GetBanwordsByChatId(ctx context.Context, chatId int64) ([]string, error) {
+	f := bson.D{{Key: "chatId", Value: chatId}}
+
+	cur, err := r.cCol.Find(ctx, f)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	var c Chat
+	for cur.Next(ctx) {
+		if curErr := cur.Decode(&c); curErr != nil {
+			return nil, err
+		}
+	}
+
+	return c.Banwords, nil
 }
 
 // Single responsibility has been violated. It's over...
-func NewRepository(c *mongo.Collection, l *slog.Logger, cfg *config.Config) *ChatRepository {
+func NewChatRepository(db *mongo.Database, l *slog.Logger, cfg *config.Config) *ChatRepository {
 	return &ChatRepository{
-		c:   c,
-		l:   l,
-		cfg: cfg,
+		cCol: db.Collection(ChatCollection),
+		mCol: db.Collection(MessageCollection),
+		l:    l,
+		cfg:  cfg,
 	}
 }
 
 func (r *ChatRepository) FindMessageByTelegramId(ctx context.Context, tId int) (*Message, error) {
 	f := bson.D{{Key: "telegram_id", Value: tId}}
 
-	cur, err := r.c.Find(ctx, f)
+	cur, err := r.mCol.Find(ctx, f)
 	if err != nil {
-		return nil, fmt.Errorf("FindMessageByTelegramIderror %w", err)
+		return nil, err
 	}
 	defer cur.Close(ctx)
 
 	var m Message
 	for cur.Next(ctx) {
 		if curErr := cur.Decode(&m); curErr != nil {
-			return nil, fmt.Errorf("CursorError %w", err)
+			return nil, err
 		}
 	}
 
@@ -91,7 +129,7 @@ func (r *ChatRepository) AddMessage(ctx context.Context, m Message) error {
 		m.Replies = m.Replies[len(m.Replies)-int(maxDs):]
 	}
 
-	_, err := r.c.InsertOne(ctx, m)
+	_, err := r.mCol.InsertOne(ctx, m)
 	r.l.Debug("new dialogue message", slog.String("message body: ", m.Body))
 
 	if err != nil {
@@ -102,37 +140,43 @@ func (r *ChatRepository) AddMessage(ctx context.Context, m Message) error {
 }
 
 func (r *ChatRepository) AddChat(ctx context.Context, c Chat) error {
-	filter := bson.M{"chatId": c.ChatID}
-	var existingChat Chat
-	err := r.c.FindOne(ctx, filter).Decode(&existingChat)
+    filter := bson.M{"chatId": c.ChatID}
+    err := r.cCol.FindOne(ctx, filter).Err()
+    switch {
+    case err == nil:
+        return fmt.Errorf("chat with id %d already exists", c.ChatID)
+    case errors.Is(err, mongo.ErrNoDocuments):
+        // crete chat ONLY if not exists
+    default:
+        r.l.Error("failed to check chat existence", slog.Int64("chatId", c.ChatID), slog.String("error", err.Error()))
+        return fmt.Errorf("failed to check chat existence: %w", err)
+    }
 
-	if err != mongo.ErrNoDocuments {
-		return fmt.Errorf("failed to check for existing chat: %w", err)
-	}
+    if _, err := r.cCol.InsertOne(ctx, c); err != nil {
+        r.l.Error("failed to insert chat", slog.Int64("chatId", c.ChatID), slog.String("error", err.Error()))
+        return fmt.Errorf("failed to insert chat: %w", err)
+    }
 
-	_, err = r.c.InsertOne(ctx, c)
-	if err != nil {
-		return fmt.Errorf("failed to insert chat: %w", err)
-	}
-
-	r.l.Debug("new chat registered", slog.String("chat name: ", c.Name), slog.Int64("chatId", c.ChatID))
-
-	return nil
+    r.l.Info("new chat registered", 
+        slog.String("chatName", c.Name),
+        slog.Int64("chatId", c.ChatID),
+    )
+    return nil
 }
 
 func (r *ChatRepository) FindChatByChatId(ctx context.Context, chatId int64) (*Chat, error) {
 	f := bson.D{{Key: "chatId", Value: chatId}}
 
-	cur, err := r.c.Find(ctx, f)
+	cur, err := r.cCol.Find(ctx, f)
 	if err != nil {
-		return nil, fmt.Errorf("FindChatByChatId error %w", err)
+		return nil, err
 	}
 	defer cur.Close(ctx)
 
 	var c Chat
 	for cur.Next(ctx) {
 		if curErr := cur.Decode(&c); curErr != nil {
-			return nil, fmt.Errorf("CursorError %w", err)
+			return nil, err
 		}
 	}
 
@@ -143,21 +187,53 @@ func (r *ChatRepository) UpdateChat(ctx context.Context, chat *Chat) error {
 	filter := bson.M{"chatId": chat.ChatID}
 	update := bson.M{"$set": bson.M{"reply_probability": chat.ReplyProbability}}
 
-	_, err := r.c.UpdateOne(ctx, filter, update)
+	_, err := r.cCol.UpdateOne(ctx, filter, update)
 	return err
 }
 
 func (r *ChatRepository) FindAllChats(ctx context.Context) ([]Chat, error) {
-	cursor, err := r.c.Find(ctx, bson.M{})
+	cursor, err := r.cCol.Find(ctx, bson.M{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to find chats: %w", err)
+		return nil, err
 	}
 	defer cursor.Close(ctx)
 
 	var chats []Chat
 	if err := cursor.All(ctx, &chats); err != nil {
-		return nil, fmt.Errorf("failed to decode chats: %w", err)
+		return nil, err
 	}
 
 	return chats, nil
+}
+
+func (r *ChatRepository) AddBanwordsToChat(ctx context.Context, cId int64, bw []string) error {
+	filter := bson.M{"chatId": cId}
+	update := bson.M{"$addToSet": bson.M{"banwords": bson.M{"$each": bw}}}
+
+	_, err := r.cCol.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *ChatRepository) RemoveBanwordsFromChat(ctx context.Context, cId int64, bw []string) error {
+	filter := bson.M{"chatId": cId}
+	update := bson.M{"$pull": bson.M{"banwords": bson.M{"$in": bw}}}
+
+	_, err := r.cCol.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *ChatRepository) AddBlacklistedBot(ctx context.Context, chatId int64, botUsername string) error {
+	filter := bson.M{"chatId": chatId}
+	update := bson.M{"$addToSet": bson.M{"blacklisted_bots": botUsername}}
+
+	_, err := r.cCol.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *ChatRepository) RemoveBlacklistedBot(ctx context.Context, chatId int64, botUsername string) error {
+	filter := bson.M{"chatId": chatId}
+	update := bson.M{"$pull": bson.M{"blacklisted_bots": botUsername}}
+
+	_, err := r.cCol.UpdateOne(ctx, filter, update)
+	return err
 }
